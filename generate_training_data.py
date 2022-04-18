@@ -13,18 +13,22 @@ def get_arguments():
     parser = argparse.ArgumentParser(description="Creates training data.")
     parser.add_argument('TIME_INTERVAL', type=float, nargs=1,
                         help='The maximum time a state will be evolved over.')
+    parser.add_argument('--VALIDATION_TIME_INTERVAL', type=float, nargs='?', default=-1,
+                        help='The maximum time a state will be evolved over for validation.')
     parser.add_argument('--NUM_TIME_STEPS', type=int, nargs='?', default=50,
                         help='[Optional] Evaluate the solution psi(t) at this many points in time. Defaults to 50.')
     parser.add_argument('--NUM_INITIAL_STATES', type=int, nargs='?', default=200,
                         help='[Optional] Number of initial states to evolve over time. Defaults to 200.')
-    parser.add_argument('--NUM_FOURIER_MODES', type=int, nargs='?', default=4,
-                        help='[Optional] Number of Fourier modes to be used to generate the initial state. Defaults to 4.')
+    parser.add_argument('--NUM_FOURIER_MODES', type=int, nargs='?', default=8,
+                        help='[Optional] Number of Fourier modes to be used to generate the initial state. Defaults to 8.')
+    parser.add_argument('--NUM_POTENTIAL_DEGREE', type=int, nargs='?', default=8,
+                        help='[Optional] Number of the highest degree polynomial to be used to generate the potential. Defaults to 8. Set to -1 to turn off potential.')
     parser.add_argument('--NUM_MAX_FOURIER_MODES', type=int, nargs='?', default=0,
                         help='Reserved')
     parser.add_argument('--SIMULATION_GRID_SIZE', type=int, nargs='?', default=100,
                         help='[Optional] Size of the grid to do numerical simulations on. Defaults to 100.')
     parser.add_argument('--TRAINING_GRID_SIZE', type=int, nargs='?', default=100,
-                        help='[Optional] Size of the grid which the wavefunction is sampled to generate the training data. Defaults to 100.')
+                        help='[Optional] Size of the grid which the wavefunction is sampled to generate the training data. Defaults to 100. This really should be equal to or less than the simulation grid size.')
 
     args = vars(parser.parse_args())
     reduce_to_single_arguments(args, ['TIME_INTERVAL'])
@@ -37,6 +41,9 @@ def check_arguments(args):
     if args['NUM_MAX_FOURIER_MODES'] != 0:
         raise NotImplementedError(
             'Lower weight higher order Fourier modes not yet supported.')
+
+    if args['VALIDATION_TIME_INTERVAL'] < 0:
+        args['VALIDATION_TIME_INTERVAL'] = args['TIME_INTERVAL']
 
     check_args_positive_numbers(args, ['TIME_INTERVAL', 'NUM_TIME_STEPS', 'NUM_INITIAL_STATES', 'NUM_FOURIER_MODES'])
 
@@ -73,6 +80,7 @@ def main():
         simulation_grid_size=params['SIMULATION_GRID_SIZE'],
         training_grid_size=params['TRAINING_GRID_SIZE'],
         fourier_modes=params['NUM_FOURIER_MODES'],
+        potential_degree=params['NUM_POTENTIAL_DEGREE'],
         max_time=params['TIME_INTERVAL'],
         ntimes=params['NUM_TIME_STEPS'],
         num_initials=params['NUM_INITIAL_STATES']
@@ -89,7 +97,8 @@ def main():
         simulation_grid_size=params['SIMULATION_GRID_SIZE'],
         training_grid_size=100,
         fourier_modes=params['NUM_FOURIER_MODES'],
-        max_time=params['TIME_INTERVAL'],
+        potential_degree=params['NUM_POTENTIAL_DEGREE'],
+        max_time=params['VALIDATION_TIME_INTERVAL'],
         ntimes=10,
         num_initials=50
     )

@@ -16,6 +16,8 @@ from utils.dataset import SchrodingerDataset
 
 # TODO tidy up file.close()
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 
 def load_data(training_path, validation_path):
     try:
@@ -81,7 +83,9 @@ def update_at_major(epoch, total_losses, component_losses, validation_losses, ou
     plt.savefig(os.path.join(output_directory, f'losses_at_epoch_{epoch+1}.pdf'))
 
 
-def train_model(params, output_directory):
+def train_model(params, output_directory, call_at_epoch=None):
+    if call_at_epoch != None and not callable(call_at_epoch):
+        raise ValueError('call_at_epoch needs to be a function.')
 
     CHECKPOINT_FREQUENCY = params['CHECKPOINT_FREQUENCY']
 
@@ -91,6 +95,7 @@ def train_model(params, output_directory):
 
         model = SchrodingerModel(hidden_dim=params['HIDDEN_LAYER_SIZE']).to(device)
         optm = torch.optim.Adam(model.parameters(), lr = params['LEARNING_RATE'])
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optm)
 
         starting_epoch = 0
 
@@ -110,6 +115,7 @@ def train_model(params, output_directory):
 
         optm = torch.optim.Adam(model.parameters(), lr = params['LEARNING_RATE'])
         optm.load_state_dict(checkpoint_data['optimizer_state_dict'])
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optm)
 
         starting_epoch = checkpoint_data['epoch']
 
@@ -130,7 +136,7 @@ def train_model(params, output_directory):
         loss_components = [0,0,0,0,0,0]
 
         # Train using training data
-        for x,y in tqdm(train_data_loader):
+        for x,y in train_data_loader:
             x = x.to(device)
             y = y.to(device)
             
@@ -152,16 +158,24 @@ def train_model(params, output_directory):
         if validation_x != None and validation_y != None:
             with torch.no_grad():
                 validation_loss = F.mse_loss(model(validation_x.to(device)), validation_y.to(device))
+                scheduler.step(validation_loss)
         
         # Update running tally of losses
         total_losses.append(epoch_loss.detach().cpu().numpy())
         for i in range(6):
-            component_losses[i].append(loss_components[i].detach().cpu().numpy())
+            if isinstance(loss_components[i], float):
+                component_losses[i].append(loss_components[i])
+            else:
+                component_losses[i].append(loss_components[i].detach().cpu().numpy())
         if validation_x != None and validation_y != None:
             validation_losses.append(validation_loss.cpu().numpy())
         
         # Update progress
         update_at_epoch(epoch, total_losses, component_losses, validation_losses, progress_file)
+
+        # Call function at epoch (eg for use in Ray Tune)
+        if call_at_epoch != None:
+            call_at_epoch(epoch, total_losses, component_losses, validation_losses)
 
         # Update at checkpoint
         if CHECKPOINT_FREQUENCY != 0 and (epoch+1) % CHECKPOINT_FREQUENCY == 0:
@@ -254,7 +268,7 @@ def get_output_folder(training_data_id):
     while True:
         directory = f'models/{training_data_id}/{num}'
         if not os.path.exists(directory):
-            print(f'Making directory \'{directory}\'')
+            print(f'Making directory \'{directory}\'.')
             os.mkdir(directory)
             return directory
         num += 1
@@ -321,7 +335,4 @@ def main():
 
 
 if __name__ == "__main__":
-    ## TODO will have to make which gpu a param - but decide this later after hyperparamter training.
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
     main()
