@@ -186,7 +186,7 @@ def train_model(params, output_directory, call_at_epoch=None):
     if exit_criteria == None:
         exit_criteria = "Max Epochs"
 
-    return total_losses[-1], [component_losses[i][-1] for i in range(6)], validation_losses[-1], exit_criteria
+    return float(total_losses[-1]), [float(component_losses[i][-1]) for i in range(6)], float(validation_losses[-1]), exit_criteria
 
 
 def get_arguments():
@@ -283,7 +283,7 @@ def get_root_directory(training_data_id):
         print(f'Making directory \'models/{training_data_id}\'.')
         os.mkdir(f'models/{training_data_id}')
 
-    return 'models/{training_data_id}'
+    return f'models/{training_data_id}'
 
 
 def create_params_file(args, directory):
@@ -319,6 +319,7 @@ def main():
     params['COMPONENTS_LOSS'] = components_loss
     params['VALIDATION_LOSS'] = validation_loss
     params['EXIT_CRITERIA'] = exit_criteria
+    
     create_params_file(params, output_dir)
 
     # Update root results file.
