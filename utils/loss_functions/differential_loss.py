@@ -1,5 +1,5 @@
 import torch
-from ..batch_interpolate import batch_interp
+from ..batch_interpolate import batch_eval
 
 def differential_loss(output, inputs, model, use_autograd=False):
     batch_size = output.shape[0]
@@ -48,7 +48,7 @@ def differential_loss(output, inputs, model, use_autograd=False):
     
     # Calculate potential energy
     V_grid = inputs[:,202:]
-    V = batch_interp(V_grid, inputs[:,0])
+    V = batch_eval(V_grid, inputs[:,0])
 
     V_real = V[:,0] * psi_real
     V_imag = V[:,0] * psi_imag

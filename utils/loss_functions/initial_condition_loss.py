@@ -1,5 +1,5 @@
 import torch
-from utils.batch_interpolate import batch_interp
+from utils.batch_interpolate import batch_eval
 
 def initial_condition_loss(inputs, model):
     grid_size = model.grid_size
@@ -12,7 +12,7 @@ def initial_condition_loss(inputs, model):
     psi0_imag = inputs[:,grid_size+2:2*grid_size+2]
     xs = inputs[:,0]
     
-    targets_real = batch_interp(psi0_real, xs)
-    targets_imag = batch_interp(psi0_imag, xs)
+    targets_real = batch_eval(psi0_real, xs)
+    targets_imag = batch_eval(psi0_imag, xs)
     
     return torch.mean((outputs_initial[:,0] - targets_real[:,0])**2 + (outputs_initial[:,1] - targets_imag[:,0])**2)

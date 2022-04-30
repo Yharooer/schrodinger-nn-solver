@@ -29,6 +29,12 @@ def get_arguments():
                         help='[Optional] Size of the grid to do numerical simulations on. Defaults to 100.')
     parser.add_argument('--TRAINING_GRID_SIZE', type=int, nargs='?', default=100,
                         help='[Optional] Size of the grid which the wavefunction is sampled to generate the training data. Defaults to 100. This really should be equal to or less than the simulation grid size.')
+    parser.add_argument('--RANDOM_X_SAMPLING', action='store_true',
+                        help='Add this argument to sample wavefunction at random positions.')
+    parser.add_argument('--RANDOM_T_SAMPLING', action='store_true',
+                        help='Add this argument to sample wavefunction at points in time.')
+    parser.add_argument('--UNSUPERVISED', action='store_true',
+                        help='Add this argument and will only generate initial states. Will generate empty target.')
 
     args = vars(parser.parse_args())
     reduce_to_single_arguments(args, ['TIME_INTERVAL'])
@@ -41,6 +47,9 @@ def check_arguments(args):
     if args['NUM_MAX_FOURIER_MODES'] != 0:
         raise NotImplementedError(
             'Lower weight higher order Fourier modes not yet supported.')
+
+    if args['RANDOM_T_SAMPLING']:
+        raise NotImplementedError('Random time sampling not implemented yet.')
 
     if args['VALIDATION_TIME_INTERVAL'] < 0:
         args['VALIDATION_TIME_INTERVAL'] = args['TIME_INTERVAL']
@@ -83,7 +92,10 @@ def main():
         potential_degree=params['NUM_POTENTIAL_DEGREE'],
         max_time=params['TIME_INTERVAL'],
         ntimes=params['NUM_TIME_STEPS'],
-        num_initials=params['NUM_INITIAL_STATES']
+        num_initials=params['NUM_INITIAL_STATES'],
+        random_x_sampling=params['RANDOM_X_SAMPLING'],
+        random_t_sampling=params['RANDOM_T_SAMPLING'],
+        unsupervised=params['UNSUPERVISED']
     )
 
     print('Generating training data. This may take a while...')
@@ -100,7 +112,10 @@ def main():
         potential_degree=params['NUM_POTENTIAL_DEGREE'],
         max_time=params['VALIDATION_TIME_INTERVAL'],
         ntimes=10,
-        num_initials=50
+        num_initials=50,
+        random_x_sampling=False,
+        random_t_sampling=False,
+        unsupervised=False
     )
     validation_dataset.initialise()
     validation_dataloader = torch.utils.data.DataLoader(validation_dataset, batch_size=1000, shuffle=True)

@@ -1,5 +1,5 @@
 import torch
-from ..batch_interpolate import batch_interp
+from ..batch_interpolate import batch_eval
 from ..legendre_coefficients import get_legendre_coefficients
 
 # import matplotlib.pyplot as plt
@@ -46,7 +46,7 @@ def energy_conservation_loss(inputs, model, use_autograd=False):
 
     legendre_xs_reshaped = torch.reshape(xs_expanded, (batch_size*legendre_n,))
 
-    V_sampled_reshaped = batch_interp(V_grid_reshaped, legendre_xs_reshaped)
+    V_sampled_reshaped = batch_eval(V_grid_reshaped, legendre_xs_reshaped)
     V_sampled = torch.reshape(V_sampled_reshaped, (legendre_n, batch_size))
 
     # plt.figure()

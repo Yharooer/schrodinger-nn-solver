@@ -43,8 +43,11 @@ def load_data(training_path, validation_path):
     return training_data, validation_x, validation_y
 
 
-def update_at_epoch(epoch, total_losses, component_losses, validation_losses, progress_file):
-    print('Epoch #{} *** Training Loss: {:.3e}; Validation Loss: {:.3e}; MSE Loss: {:.3e}'.format((epoch+1),total_losses[-1], validation_losses[-1], component_losses[0][-1]))
+def update_at_epoch(epoch, total_losses, component_losses, validation_losses, progress_file, unsupervised_randomised=False):
+    if unsupervised_randomised:
+        print('Epoch #{} *** Training Loss: {:.3e}; Validation Loss: {:.3e}'.format((epoch+1),total_losses[-1], validation_losses[-1]))
+    else:
+        print('Epoch #{} *** Training Loss: {:.3e}; Validation Loss: {:.3e}; MSE Loss: {:.3e}'.format((epoch+1),total_losses[-1], validation_losses[-1], component_losses[0][-1]))
 
     progress_file.write(f'{(epoch+1)},{total_losses[-1]},{component_losses[0][-1]},{component_losses[1][-1]},{component_losses[2][-1]},{component_losses[3][-1]},{component_losses[4][-1]},{component_losses[5][-1]},{validation_losses}\n')
     progress_file.flush()
@@ -68,7 +71,7 @@ def update_at_major(epoch, total_losses, component_losses, validation_losses, ou
     # Plot losses
     plt.figure(figsize=(7,7))
     plt.plot(total_losses)
-    plt.plot(component_losses[0])
+    plt.plot(component_losses[0] if not params['UNSUPERVISED_RANDOMISED'] else 0)
     plt.plot(component_losses[1])
     plt.plot(component_losses[2])
     plt.plot(component_losses[3])
@@ -139,6 +142,15 @@ def train_model(params, output_directory, call_at_epoch=None):
         for x,y in train_data_loader:
             x = x.to(device)
             y = y.to(device)
+
+            if params['UNSUPERVISED_RANDOMISED']:
+                batch_size = x.shape[0]
+                randomised_positions = torch.rand((batch_size,))
+                randomised_times = torch.rand((batch_size,))*params['RAND_MAX_TIME']
+
+                x = x.clone()
+                x[:,0] = randomised_positions
+                x[:,1] = randomised_times
             
             optm.zero_grad()
             output = model(x)     
@@ -171,7 +183,7 @@ def train_model(params, output_directory, call_at_epoch=None):
             validation_losses.append(validation_loss.cpu().numpy())
         
         # Update progress
-        update_at_epoch(epoch, total_losses, component_losses, validation_losses, progress_file)
+        update_at_epoch(epoch, total_losses, component_losses, validation_losses, progress_file, params['UNSUPERVISED_RANDOMISED'])
 
         # Call function at epoch (eg for use in Ray Tune)
         if call_at_epoch != None:
@@ -221,6 +233,12 @@ def get_arguments():
                         help='Specify to continue training from a checkpoint.')
     parser.add_argument('--USE_AUTOGRAD', action='store_true',
                     help='Add this argument to use autograd. Warning: will use a lot of memory.')
+    parser.add_argument('--UNSUPERVISED_RANDOMISED', action='store_true',
+                        help='For unsupervised dataset, will randomise positions and times.')
+    parser.add_argument('--RAND_MAX_TIME', type=float, nargs='?', default=0,
+                        help='For unsupervised dataset, will set the maximum time.')
+    parser.add_argument('--RAND_TIME_CUTOFF', type=float, nargs='?', default=0,
+                        help='For unsupervised dataset, will set the length of the cutoff for time sampling.')
 
     args = vars(parser.parse_args())
     reduce_to_single_arguments(args)
@@ -237,6 +255,12 @@ def check_arguments(args):
             args['TRAINING_DATA'] = f'training_data/{args["TRAINING_DATA"]}/training_dataset.pt'
         else:
             raise ValueError(f'Cannot find training data file \'{args["TRAINING_DATA"]}\'.')
+
+    if args['RAND_TIME_CUTOFF'] != 0:
+        raise NotImplementedError('Unsupervised time cutoff not implemented yet.')
+
+    if args['UNSUPERVISED_RANDOMISED'] and args['RAND_MAX_TIME'] <= 0:
+        raise ValueError('When UNSUPERVISED_RANDOMISED is set, RAND_MAX_TIME must be set to some positive value.')
 
     if args['VALIDATION_DATA'] == None:
         typical_path = args['TRAINING_DATA'].replace('training_dataset.pt', 'validation_dataset.pt')
