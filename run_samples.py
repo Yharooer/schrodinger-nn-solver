@@ -207,7 +207,6 @@ def main():
 
     # Load model
     model_state_dict = torch.load(params['MODEL'])['model_state_dict']
-    # print(model_state_dict)
     model = SchrodingerModel(hidden_dim=params['HIDDEN_LAYER_SIZE']).to(device)
     model.load_state_dict(model_state_dict)
 

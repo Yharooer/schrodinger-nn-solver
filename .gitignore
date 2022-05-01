@@ -3,6 +3,9 @@ models/
 training_data/
 hyperparam_tune/
 model_evals/
+google_results/
+performance/
+*:Zone.Identifier
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
