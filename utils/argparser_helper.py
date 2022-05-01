@@ -24,6 +24,9 @@ def check_args_positive_numbers(args, names=None):
         names = args.keys()
 
     for name in names:
+        if not name in args:
+            raise ValueError(f'You asked me to check for \'{name}\' in the list of arguments but it wasn\'t there.')
+
         check_arg_position_number(args, name)
 
 
