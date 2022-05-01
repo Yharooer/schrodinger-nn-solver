@@ -106,12 +106,6 @@ class SchrodingerDataset(torch.utils.data.Dataset):
             x_imag = initials[1, :, c]
             x_potl = initials[2, :, c]
 
-            plt.figure()
-            plt.plot(x_real)
-            plt.plot(x_imag)
-            plt.plot(x_potl)
-            plt.show()
-
             if self.random_x_sampling:
                 x_position = xs_train_grid[b,c,a]
             elif self.unsupervised:
