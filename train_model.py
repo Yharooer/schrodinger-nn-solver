@@ -84,6 +84,7 @@ def update_at_major(epoch, total_losses, component_losses, validation_losses, ou
     plt.legend(['Total', 'MSE', 'dt', 'BCs', 'ICs', 'Norm.', 'Energy', 'Validation'])
     plt.title(f'Losses at Epoch {(epoch+1)} with Loss {"{:.3e}".format(total_losses[-1])}')
     plt.savefig(os.path.join(output_directory, f'losses_at_epoch_{epoch+1}.pdf'))
+    plt.close()
 
 
 def train_model(params, output_directory, call_at_epoch=None):
