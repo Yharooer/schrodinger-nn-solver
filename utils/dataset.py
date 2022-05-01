@@ -141,7 +141,7 @@ class SchrodingerDataset(torch.utils.data.Dataset):
         n = np.arange(start=1, stop=self.fourier_modes+1, step=1)
 
         scale_factor = np.sum(fourier_real_coefficients**2) + np.sum(fourier_imag_coefficients**2)
-        scale_factor = (2*scale_factor)**0.5
+        scale_factor = np.sqrt(2/scale_factor)
         fourier_real_coefficients *= scale_factor
         fourier_imag_coefficients *= scale_factor
 
