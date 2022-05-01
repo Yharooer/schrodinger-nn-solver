@@ -24,8 +24,8 @@ def numerical_schrodinger(initials, ts, grid_size=100, grid_length=1):
         y = np.reshape(y, shape)
         psi_real = y[0]
         psi_imag = y[1]
-        dpsi_real = np.expand_dims(-KE@psi_imag - v*psi_imag, 0)
-        dpsi_imag = np.expand_dims(KE@psi_real + v*psi_real, 0)
+        dpsi_real = np.expand_dims(KE@psi_imag + v*psi_imag, 0)
+        dpsi_imag = np.expand_dims(-KE@psi_real - v*psi_real, 0)
         return np.reshape(np.concatenate((dpsi_real, dpsi_imag), axis=0), flattened_shape)
     
     sol = scipy.integrate.solve_ivp(dpsi_dt, t_span=[0,np.max(ts)], y0=psi0, t_eval=ts, method="RK23")

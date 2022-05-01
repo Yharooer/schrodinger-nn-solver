@@ -54,7 +54,7 @@ def differential_loss(output, inputs, model, use_autograd=False):
     V_imag = V[:,0] * psi_imag
 
     # Calculate loss
-    diff_1 = psi_dt_real - 0.5*psi_d2x_imag + V_imag
-    diff_2 = psi_dt_imag + 0.5*psi_d2x_real - V_real
+    diff_1 = psi_dt_real + 0.5*psi_d2x_imag - V_imag
+    diff_2 = psi_dt_imag - 0.5*psi_d2x_real + V_real
 
     return torch.mean(diff_1**2 + diff_2**2)
