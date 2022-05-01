@@ -3,16 +3,15 @@ import torch
 from utils.numerical_schrodinger import numerical_schrodinger
 from utils.batch_interpolate import batch_interp
 import scipy.interpolate
+import random
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-
-import matplotlib.pyplot as plt
 
 # TODO we should probably have a SchrodingerDatasetGenerator object which creates
 # a SchrodingerDataset object cause right now we are passing way too many arguments
 # into this when all we want to do is load the dataset.
 class SchrodingerDataset(torch.utils.data.Dataset):
-    def __init__(self, simulation_grid_size, training_grid_size, fourier_modes, potential_degree, max_time, ntimes, num_initials, random_x_sampling=None, random_t_sampling=None, unsupervised=None):
+    def __init__(self, simulation_grid_size, training_grid_size, fourier_modes, potential_degree, max_time, ntimes, num_initials, random_x_sampling=None, random_t_sampling=None, number_t_subsamples=1000, unsupervised=None):
         self.simulation_grid_size = simulation_grid_size
         self.training_grid_size = training_grid_size
         self.fourier_modes = fourier_modes
@@ -22,6 +21,7 @@ class SchrodingerDataset(torch.utils.data.Dataset):
         self.num_initials = num_initials
         self.random_x_sampling = random_x_sampling
         self.random_t_sampling = random_t_sampling
+        self.number_t_subsamples = number_t_subsamples
         self.unsupervised = unsupervised
 
         self.num_data = num_initials*ntimes*training_grid_size
@@ -56,7 +56,10 @@ class SchrodingerDataset(torch.utils.data.Dataset):
             initials[1, :, i] = psi0_imag.T
             initials[2, :, i] = v.T
 
-        ts = np.linspace(0, self.max_time, self.ntimes)
+        if self.random_t_sampling:
+            ts = np.linspace(0, self.max_time, self.number_t_subsamples)
+        else:
+            ts = np.linspace(0, self.max_time, self.ntimes)
 
         print('Done generating initial states. Time evolving.')
 
@@ -72,19 +75,19 @@ class SchrodingerDataset(torch.utils.data.Dataset):
 
             if self.random_x_sampling:
                 integrated_tmp = np.swapaxes(integrated, 1, 3)
-                integrated_tmp = np.reshape(integrated_tmp, (2*self.num_initials*self.ntimes, self.simulation_grid_size))
+                integrated_tmp = np.reshape(integrated_tmp, (2*self.num_initials*len(ts), self.simulation_grid_size))
                 
-                xs_train_grid = np.random.rand(self.training_grid_size, self.num_initials, self.ntimes)
+                xs_train_grid = np.random.rand(self.training_grid_size, self.num_initials, len(ts))
 
-                xs_train_grid_tmp = np.zeros((2, self.training_grid_size, self.num_initials, self.ntimes))
+                xs_train_grid_tmp = np.zeros((2, self.training_grid_size, self.num_initials, len(ts)))
                 xs_train_grid_tmp[0,:,:,:] = xs_train_grid
                 xs_train_grid_tmp[1,:,:,:] = xs_train_grid
                 
-                xs_train_grid_reshape = np.reshape(np.swapaxes(xs_train_grid_tmp, 1, 3), (2*self.num_initials*self.ntimes, self.training_grid_size))
+                xs_train_grid_reshape = np.reshape(np.swapaxes(xs_train_grid_tmp, 1, 3), (2*self.num_initials*len(ts), self.training_grid_size))
 
                 integrated_tmp = batch_interp(torch.tensor(integrated_tmp).to(device), torch.tensor(xs_train_grid_reshape).to(device)).cpu().numpy()
 
-                integrated_tmp = np.reshape(integrated_tmp, (2, self.ntimes, self.num_initials, self.training_grid_size))
+                integrated_tmp = np.reshape(integrated_tmp, (2, len(ts), self.num_initials, self.training_grid_size))
                 integrated = np.swapaxes(integrated_tmp, 1, 3)
         else:
             integrated = None
@@ -101,6 +104,9 @@ class SchrodingerDataset(torch.utils.data.Dataset):
             a = i % self.ntimes                              # time index
             b = int(i/self.ntimes) % self.training_grid_size # space index
             c = int(i/self.ntimes/self.training_grid_size)   # psi0 index
+
+            if self.random_t_sampling:
+                a = random.randrange(0, self.number_t_subsamples)
 
             x_real = initials[0, :, c]
             x_imag = initials[1, :, c]

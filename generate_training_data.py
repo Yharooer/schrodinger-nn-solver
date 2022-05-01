@@ -33,6 +33,8 @@ def get_arguments():
                         help='Add this argument to sample wavefunction at random positions.')
     parser.add_argument('--RANDOM_T_SAMPLING', action='store_true',
                         help='Add this argument to sample wavefunction at points in time.')
+    parser.add_argument('--NUMBER_T_SUBSAMPLES', type=int, nargs='?', default=1000,
+                        help='The number of subsamples to randomise from when performing random time sampling.')
     parser.add_argument('--UNSUPERVISED', action='store_true',
                         help='Add this argument and will only generate initial states. Will generate empty target.')
 
@@ -48,13 +50,10 @@ def check_arguments(args):
         raise NotImplementedError(
             'Lower weight higher order Fourier modes not yet supported.')
 
-    if args['RANDOM_T_SAMPLING']:
-        raise NotImplementedError('Random time sampling not implemented yet.')
-
     if args['VALIDATION_TIME_INTERVAL'] < 0:
         args['VALIDATION_TIME_INTERVAL'] = args['TIME_INTERVAL']
 
-    check_args_positive_numbers(args, ['TIME_INTERVAL', 'NUM_TIME_STEPS', 'NUM_INITIAL_STATES', 'NUM_FOURIER_MODES'])
+    check_args_positive_numbers(args, ['TIME_INTERVAL', 'NUM_TIME_STEPS', 'NUM_INITIAL_STATES', 'NUM_FOURIER_MODES', 'TRAINING_GRID_SIZE', 'SIMULATION_GRID_SIZE', 'VALIDATION_TIME_INTERVAL', 'NUMBER_T_SUBSAMPLES'])
 
 
 def get_output_folder():
@@ -95,6 +94,7 @@ def main():
         num_initials=params['NUM_INITIAL_STATES'],
         random_x_sampling=params['RANDOM_X_SAMPLING'],
         random_t_sampling=params['RANDOM_T_SAMPLING'],
+        number_t_subsamples=params['NUMBER_T_SUBSAMPLES'],
         unsupervised=params['UNSUPERVISED']
     )
 
