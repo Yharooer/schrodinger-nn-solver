@@ -5,6 +5,7 @@ import torch
 import pickle
 import time
 import json
+import numpy as np
 import pandas
 import torch.nn.functional as F
 from tqdm import tqdm
@@ -13,8 +14,6 @@ from utils.schrodinger_losses import loss_function, get_loss_short_labels
 from utils.model_definition import SchrodingerModel
 from utils.argparser_helper import reduce_to_single_arguments, check_args_positive_numbers, print_arguments
 from utils.dataset import SchrodingerDataset
-
-# TODO tidy up file.close()
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -144,15 +143,47 @@ def train_model(params, output_directory, call_at_epoch=None):
             x = x.to(device)
             y = y.to(device)
 
+            batch_size = x.shape[0]
+
             if params['UNSUPERVISED_RANDOMISED']:
-                batch_size = x.shape[0]
                 randomised_positions = torch.rand((batch_size,))
                 randomised_times = torch.rand((batch_size,))*params['RAND_MAX_TIME']
 
                 x = x.clone()
                 x[:,0] = randomised_positions
                 x[:,1] = randomised_times
-            
+
+            # Global phase transformation
+            if params['TRAINING_MIXING']:
+                mixing_angle = 2*np.pi*torch.rand(batch_size, 1).to(device)
+                cos_m = torch.cos(mixing_angle)
+                sin_m = torch.sin(mixing_angle)
+
+                new_real = cos_m*x[:,2:102] + sin_m*x[:,102:202]
+                new_imag = -sin_m*x[:,2:102] + cos_m*x[:,102:202]
+
+                x[:,2:102] = new_real
+                x[:,102:202] = new_imag
+
+                new_y_real = cos_m[:,0]*y[:,0] + sin_m[:,0]*y[:,1]
+                new_y_imag = -sin_m[:,0]*y[:,0] + cos_m[:,0]*y[:,1]
+
+                y[:,0] = new_y_real
+                y[:,1] = new_y_imag
+
+            # Mixing between states
+            if params['TRAINING_MIXING'] and params['UNSUPERVISED_RANDOMISED']:
+                ## TODO can also do local phase transformations to add randomness
+
+                # Linear combination of potentials
+                mix_cffs = torch.normal(torch.zeros((batch_size,1)),1).to(device)
+                x[:,202:] = torch.roll(x[:,202:], shifts=1, dims=0) + mix_cffs*torch.roll(x[:,202:], shifts=-1, dims=0)
+
+                # Potential scaling
+                if params['UNSUPERVISED_POTENTIAL_SCALING'] != 0:
+                    scale_cffs = torch.normal(torch.zeros(batch_size, 1), params['UNSUPERVISED_POTENTIAL_SCALING']).to(device) + 1
+                    x[:,202:] = scale_cffs * x[:,202:]
+
             optm.zero_grad()
             output = model(x)     
             loss, components = loss_function(output,x,y,model,params['HYPERPARAM_MSE'], params['HYPERPARAM_DT'], params['HYPERPARAM_BC'], params['HYPERPARAM_IC'], params['HYPERPARAM_NORM'], params['HYPERPARAM_ENERGY'], use_autograd=params['USE_AUTOGRAD'])
@@ -240,6 +271,10 @@ def get_arguments():
                         help='For unsupervised dataset, will set the maximum time.')
     parser.add_argument('--RAND_TIME_CUTOFF', type=float, nargs='?', default=0,
                         help='For unsupervised dataset, will set the length of the cutoff for time sampling.')
+    parser.add_argument('--TRAINING_MIXING', action='store_true',
+                        help='Will use global phase invariance to mix training data at each epoch. When combined with --UNSUPERVISED_RANDOMISED, will also take linear combinations of initial states and random combinations of potentials.')
+    parser.add_argument('--UNSUPERVISED_POTENTIAL_SCALING', type=float, nargs='?', default=0,
+                        help='Will scale the potential by a random number sampled with mean 1 standard deviation UNSUPERVISED_POTENTIAL_SCALING. A value greater than one will have the tendancy of making the potentials larger. If zero is provided, will not scale. Default is 0.')
 
     args = vars(parser.parse_args())
     reduce_to_single_arguments(args)
