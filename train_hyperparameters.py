@@ -4,13 +4,16 @@ from ray.tune.suggest.bayesopt import BayesOptSearch
 import os
 import matplotlib.pyplot as plt
 from train_model import train_model, create_params_file, get_output_folder, extract_training_data_id
+from ray.tune.suggest.dragonfly import DragonflySearch
+from ray.tune.stopper import TrialPlateauStopper
 
-TRAINING_DATA = 'training_data/27/training_dataset.pt'
-VALIDATION_DATA = 'training_data/27/validation_dataset.pt'
+TRAINING_DATA = 'training_data/38/training_dataset.pt'
+VALIDATION_DATA = 'training_data/38/validation_dataset.pt'
 
 NUM_SAMPLES = 400
-MAX_EPOCHS = 400
-NUM_GPUS = 1
+MAX_EPOCHS = 200
+NUM_GPUS = 2
+MAX_PER_GPU = 3
 
 training_data_id = extract_training_data_id(TRAINING_DATA)
 
@@ -22,17 +25,21 @@ default_params = {
     'HIDDEN_LAYER_SIZE': 500,
     'CHECKPOINT_FREQUENCY': 5,
     'FROM_CHECKPOINT': None,
-    'USE_AUTOGRAD': False
+    'USE_AUTOGRAD': False,
+    'UNSUPERVISED_RANDOMISED': True,
+    'RAND_MAX_TIME': 0.5,
+    'TRAINING_MIXING': True,
+    'UNSUPERVISED_POTENTIAL_SCALING': 2.0
 }
 
 search_space = {
-    'LEARNING_RATE': 1e-3,
+    'LEARNING_RATE': 1e-4,
     'HYPERPARAM_MSE': 0,
-    'HYPERPARAM_DT': ray.tune.uniform(1e-5,2e-2),
-    'HYPERPARAM_BC': ray.tune.uniform(5e-4,5e-1),
-    'HYPERPARAM_IC': ray.tune.uniform(1e-4,5e-1),
-    'HYPERPARAM_NORM': ray.tune.uniform(1e-8,1e-3),
-    'HYPERPARAM_ENERGY': ray.tune.uniform(1e-8,1e-2),
+    'HYPERPARAM_DT': ray.tune.loguniform(1e-9,1e-3),
+    'HYPERPARAM_BC': ray.tune.loguniform(1e-6, 1e0),
+    'HYPERPARAM_IC': ray.tune.loguniform(1e-6, 1e0),
+    'HYPERPARAM_NORM': 0,
+    'HYPERPARAM_ENERGY': 0,
 }
 
 def call_at_epoch(epoch, total_losses, component_losses, validation_losses):
@@ -70,17 +77,46 @@ def get_hyperparam_output_directory():
             return directory
         num += 1
     
-ray.init(num_gpus=NUM_GPUS)
+ray.init(
+    num_gpus=NUM_GPUS,
+    object_store_memory=200 * 1024 * 1024
+)
+
+dragonfly_search = DragonflySearch(
+    optimizer="bandit",
+    domain="euclidean",
+    metric='validation_loss',
+    mode='min',
+    points_to_evaluate=[
+        {
+            'LEARNING_RATE': 1e-4,
+            'HYPERPARAM_MSE': 0,
+            'HYPERPARAM_DT': 6e-5,
+            'HYPERPARAM_BC': 2e-2,
+            'HYPERPARAM_IC': 1e-2,
+            'HYPERPARAM_NORM': 0,
+            'HYPERPARAM_ENERGY': 0,
+        }
+    ]
+)
+
+trial_stopper = TrialPlateauStopper(
+    num_results=10,
+    std=0.005,
+    metric='validation_loss',
+    mode='min'
+)
 
 analysis = ray.tune.run(
     training_loop_wrapper,
     metric='validation_loss',
     mode='min',
     config=search_space,
-    resources_per_trial= {'cpu': 0 ,'gpu': 0.11},
+    resources_per_trial= {'cpu': 0 ,'gpu': 1.0/MAX_PER_GPU},
     num_samples=NUM_SAMPLES,
-    local_dir="/local/scratch/ebc30/ray_results",
-    scheduler=ray.tune.schedulers.ASHAScheduler(max_t=MAX_EPOCHS, grace_period=4)
+    search_alg=dragonfly_search,
+    scheduler=ray.tune.schedulers.ASHAScheduler(max_t=MAX_EPOCHS, grace_period=4),
+    stop = trial_stopper
 )
 
 # Save results
