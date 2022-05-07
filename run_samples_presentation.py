@@ -6,7 +6,7 @@ from utils.numerical_schrodinger import numerical_schrodinger
 from utils.model_definition import SchrodingerModel
 import torch
 import matplotlib.pyplot as plt
-from matplotlib import animation
+import matplotlib as mpl
 import json
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -68,75 +68,47 @@ def test_model(model, psi0, v, t_max, t_steps, output_file, plot_phase=False):
     
     xs = np.linspace(0, 1, 100)
     
-    # Normalisation vs time
-    fig = plt.figure(figsize=(5,5))
-    plt.plot(ts, np.sum(nn_ys_real**2 + nn_ys_imag**2, axis=1) / 100)
-    fig.suptitle('Normalisation')
-    plt.xlabel('Time')
-    plt.ylabel('∫|Ψ|² dx')
-    
     # Plot animations
-    fig = plt.figure(figsize=(12,8))
-    
-    plt.rcParams["animation.html"] = "html5"
-    plt.rcParams["figure.dpi"] = 75
+    mpl.rcParams['font.family'] = 'CMU Bright'
+    mpl.rcParams['mathtext.fontset'] = 'cm'
+
+    fig = plt.figure(figsize=(5.1,3.0))
     
     # Helper for setting up subplot limits and labels
-    def setup_subplot(subplot, prop):
-        prop = prop.upper()
-        if not prop in ["REAL", "IMAG", "ABS", "PHASE"]:
-            raise ValueError(f'Bad property \'{prop}\'.')
+    def setup_subplot(subplot):
         subplot.set_xlim(0,1)
-        if prop in ["REAL", "IMAG"]:
-            subplot.set_ylim(-2,2)
-            subplot.set_ylabel("Real" if prop == "REAL" else "Imaginary")
-        if prop == "ABS":
-            subplot.set_ylim(0,2)
-            subplot.set_ylabel("Magnitude")
-        if prop == "PHASE":
-            subplot.set_ylim(-np.pi,np.pi)
-            subplot.set_ylabel("Phase")
-            subplot.set_yticks(np.arange(-np.pi,np.pi,np.pi/4))
+        subplot.set_ylim(-2,2)
         
-        line, = subplot.plot([],[], lw=2)
-        return line
+        line1, = subplot.plot([],[], lw=2, color='#3333B2')
+        line2, = subplot.plot([],[], lw=2, color='#B23333')
+        return line1,line2
     
-    # Types of each subplot
-    props = [None]*4
-    if plot_phase:
-        props = ["ABS", "ABS", "PHASE", "PHASE"]
-    else:
-        props = ["REAL", "REAL", "IMAG", "IMAG"]
        
-    subplots = [None]*4
-    lines = [None]*4
-    for i in range(4):
-        subplots[i] = plt.subplot(2,2,i+1)
-        lines[i] = setup_subplot(subplots[i], props[i])
+    subplots = []
+    lines = []
+    for i in range(2):
+        subplot = plt.subplot(1,2,i+1)
+        line1, line2 = setup_subplot(subplot)
+        lines.append(line1)
+        lines.append(line2)
+        subplots.append(subplot)
         
-    subplots[0].title.set_text('NN model')
-    subplots[1].title.set_text('Numerical model')
+    subplots[0].title.set_text('Physics-Driven Model')
+    subplots[0].set_ylabel("$\\psi(\\vec x,t)$")
+    subplots[1].title.set_text('Numerical Model')
     
     def animate(i):
-        if plot_phase:
-            lines[0].set_data(xs, np.sqrt(nn_ys_real[i,:]**2 + nn_ys_imag[i,:]**2))
-            lines[2].set_data(xs, np.arctan2(nn_ys_real[i,:], nn_ys_imag[i,:]))
+        lines[0].set_data(xs, nn_ys_real[i,:])
+        lines[1].set_data(xs, nn_ys_imag[i,:])
         
-            lines[1].set_data(xs, np.sqrt(num_ys_real[i,:]**2 + num_ys_imag[i,:]**2))
-            lines[3].set_data(xs, np.arctan2(num_ys_real[i,:], num_ys_imag[i,:]))
-
-        else:
-            lines[0].set_data(xs, nn_ys_real[i,:])
-            lines[2].set_data(xs, nn_ys_imag[i,:])
-            
-            lines[1].set_data(xs, num_ys_real[i,:])
-            lines[3].set_data(xs, num_ys_imag[i,:])
-
-        return lines
+        lines[2].set_data(xs, num_ys_real[i,:])
+        lines[3].set_data(xs, num_ys_imag[i,:])
     
-    anim = animation.FuncAnimation(fig, animate, frames=len(ts), interval=50, blit=True)
-    # writer = animation.Writers['ffmpeg'](fps=30, bitrate=1800)
-    anim.save(output_file)
+    for i in range(len(ts)):
+        animate(i)
+        plt.savefig(output_file + '-' + str(i) + '.pdf')
+    
+    plt.close()
 
 
 def get_arguments():
@@ -145,7 +117,7 @@ def get_arguments():
                         help='The model to evaluate.')
     parser.add_argument('T_MAX', type=float, nargs=1,
                         help='The max time step.')
-    parser.add_argument('--T_STEPS', type=int, nargs='?', default=200,
+    parser.add_argument('--T_STEPS', type=int, nargs='?', default=50,
                         help='The max number of steps.')
     parser.add_argument('--HIDDEN_LAYER_SIZE', type=int, nargs='?', default=500,
                         help='The number of hidden layers.')
@@ -199,11 +171,14 @@ class ModelTests():
 
     def perform_tests(self, model):
         for test in self.tests:
-            test_model(model, lambda x: (test[1](x), test[2](x)), test[3], self.t_max, self.t_steps, os.path.join(self.output_dir, test[0]+'.mp4'))
+            test_model(model, lambda x: (test[1](x), test[2](x)), test[3], self.t_max, self.t_steps, os.path.join(self.output_dir, test[0]))
 
 
 def main():
     params = get_arguments()
+
+    for font in mpl.font_manager.findSystemFonts('fonts'):
+        mpl.font_manager.fontManager.addfont(font)
 
     # Load model
     model_state_dict = torch.load(params['MODEL'])['model_state_dict']
@@ -220,14 +195,11 @@ def main():
     test.add('particle_in_box_eigen2', lambda x: np.sqrt(2)*np.sin(2*np.pi*x), lambda x: 0*x, lambda x: 0*x)
     test.add('particle_in_box_eigen3', lambda x: np.sqrt(2)*np.sin(3*np.pi*x), lambda x: 0*x, lambda x: 0*x)
     test.add('particle_in_box_eigen4', lambda x: np.sqrt(2)*np.sin(4*np.pi*x), lambda x: 0*x, lambda x: 0*x)
-    test.add('particle_in_box_eigen5', lambda x: np.sqrt(2)*np.sin(5*np.pi*x), lambda x: 0*x, lambda x: 0*x)
-    test.add('particle_in_box_eigen6', lambda x: np.sqrt(2)*np.sin(6*np.pi*x), lambda x: 0*x, lambda x: 0*x)
     test.add('raised_box_eigen1', lambda x: np.sqrt(2)*np.sin(np.pi*x), lambda x: 0*x, lambda x: 0*x + 5)
     test.add('raised_box_eigen2', lambda x: np.sqrt(2)*np.sin(2*np.pi*x), lambda x: 0*x, lambda x: 0*x + 5)
     test.add('raised_box_eigen3', lambda x: np.sqrt(2)*np.sin(3*np.pi*x), lambda x: 0*x, lambda x: 0*x + 5)
-    test.add('raised_box_eigen6', lambda x: np.sqrt(2)*np.sin(6*np.pi*x), lambda x: 0*x, lambda x: 0*x + 5)
-    test.add('sloped_box_1', lambda x: np.sqrt(2)*np.sin(np.pi*x), lambda x: 0*x, lambda x: 2*x)
-    test.add('sloped_box_2', lambda x: np.sqrt(2)*np.sin(np.pi*x), lambda x: 0*x, lambda x: 5*x)
+    test.add('sloped_box_1', lambda x: np.sqrt(2)*np.sin(np.pi*x), lambda x: 0*x, lambda x: 0.2*x)
+    test.add('sloped_box_2', lambda x: np.sqrt(2)*np.sin(np.pi*x), lambda x: 0*x, lambda x: x)
     test.add('harmonic_1', lambda x: 1.728*np.exp(-0.5*7*(2*x-1)**2), lambda x: 0*x, lambda x: 0.125*7*(2*x-1)**2)
     # test.add('particle_in_box_flat2', lambda x: (1-(1/3))*(1-(2*x-1)**2), lambda x: 0*x, lambda x: 0*x)
     # test.add('particle_in_box_flat4', lambda x: (1-(1/5))*(1-(2*x-1)**4), lambda x: 0*x, lambda x: 0*x)

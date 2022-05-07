@@ -7,6 +7,7 @@ from results_common.results_against_time_single_tests import get_tests as get_re
 from timeit import timeit
 import random
 import pandas
+from tqdm import tqdm
 
 #device = "cuda" if torch.cuda.is_available() else "cpu"
 device = 'cpu'
@@ -40,7 +41,7 @@ def solve_nn(params, test, model, xs, t):
         t_so_far = t_i
 
         xs = torch.linspace(0, 1, 100).float()
-        ts = torch.tensor([t]).float()
+        ts = torch.tensor([t_next]).float()
         
         if not torch.is_tensor(ts):
             ts = torch.tensor(ts)
@@ -80,7 +81,7 @@ def do_single_states(output_dir, params, model=None):
         ts = list(np.linspace(0,params['MAX_TIME'], params['NUM_TIME_INTERVALS']+1)[1:])
         random.shuffle(ts)
 
-        for t in ts:
+        for t in tqdm(ts):
             if t == 0:
                 MSE_ERRORS.append(0)
                 TIME_TAKEN.append(0)
@@ -88,9 +89,6 @@ def do_single_states(output_dir, params, model=None):
 
             print(f'Doing test \'{test.name}\' at time {t}.')
             real_soln, imag_soln = solve_general(params, test, model, xs, t)
-
-            print('TIME FOR SHAPES')
-            print(real_soln.shape)
 
             real_truth = test.real_soln(xs,t)
             imag_truth = test.imag_soln(xs,t)

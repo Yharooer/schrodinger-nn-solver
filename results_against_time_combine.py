@@ -20,6 +20,7 @@ def do_combine_data(output_dir, params):
     plt.legend(['Our Model', 'Numerical Model'], frameon=False)
     plt.xlabel('Model Time')
     plt.ylabel('MSE Error')
+    plt.yscale('log')
     plt.title('Our Model vs Numerical Model')
     
     plt.savefig(os.path.join(output_dir, f'combined_errors.pdf'))
