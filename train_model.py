@@ -222,10 +222,15 @@ def train_model(params, output_directory, call_at_epoch=None, ray_tune_checkpoin
                 loss_components[i] += components[i]/len(train_data_loader)
 
         # Evaluate validation
+        validation_loss = None
         if validation_x != None and validation_y != None:
             with torch.no_grad():
                 validation_loss = F.mse_loss(model(validation_x.to(device)), validation_y.to(device))
-                scheduler.step(validation_loss)
+        
+        if params['DYNAMIC_LR_USE_TRAINING_LOSS']:
+            scheduler.step(epoch_loss)
+        else:
+            scheduler.step(validation_loss)
         
         # Update running tally of losses
         total_losses.append(epoch_loss.detach().cpu().numpy())
@@ -309,6 +314,8 @@ def get_arguments():
                         help='Will use global phase invariance to mix training data at each epoch. When combined with --UNSUPERVISED_RANDOMISED, will also take linear combinations of initial states and random combinations of potentials.')
     parser.add_argument('--UNSUPERVISED_POTENTIAL_SCALING', type=float, nargs='?', default=0,
                         help='Will scale the potential by a random number sampled with mean 1 standard deviation UNSUPERVISED_POTENTIAL_SCALING. A value greater than one will have the tendancy of making the potentials larger. If zero is provided, will not scale. If a negative number is provided, will turn off potential. Default is 0.')
+    parser.add_argument('--DYNAMIC_LR_USE_TRAINING_LOSS', action='store_true',
+                        help='Will use training loss instead of validation loss for ReduceLROnPlateau. Allows us to train data when the validation domain doesn\'t match the training domain.')
 
     args = vars(parser.parse_args())
     reduce_to_single_arguments(args)
