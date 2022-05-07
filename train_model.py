@@ -189,8 +189,10 @@ def train_model(params, output_directory, call_at_epoch=None, ray_tune_checkpoin
             batch_size = x.shape[0]
 
             if params['UNSUPERVISED_RANDOMISED']:
+                current_max_time = params['RAND_MAX_TIME'] + params['UNSUPERVISED_TIME_INCREASE_RATE']*epoch
+
                 randomised_positions = torch.rand((batch_size,))
-                randomised_times = torch.rand((batch_size,))*params['RAND_MAX_TIME']
+                randomised_times = torch.rand((batch_size,))*current_max_time
 
                 x = x.clone()
                 x[:,0] = randomised_positions
@@ -336,13 +338,15 @@ def get_arguments():
     parser.add_argument('--UNSUPERVISED_RANDOMISED', action='store_true',
                         help='For unsupervised dataset, will randomise positions and times.')
     parser.add_argument('--RAND_MAX_TIME', type=float, nargs='?', default=0,
-                        help='For unsupervised dataset, will set the maximum time.')
-    parser.add_argument('--RAND_TIME_CUTOFF', type=float, nargs='?', default=0,
+                        help='For unsupervised dataset, will set the maximum time. Combine with UNSUPERVISED_TIME_INCREASE_RATE to increase the max time each epoch.')
+    parser.add_argument('--RAND_TIME_CUTOFF', type=float, nargs='?', default=0, 
                         help='For unsupervised dataset, will set the length of the cutoff for time sampling.')
     parser.add_argument('--TRAINING_MIXING', action='store_true',
                         help='Will use global phase invariance to mix training data at each epoch. When combined with --UNSUPERVISED_RANDOMISED, will also take linear combinations of initial states and random combinations of potentials.')
     parser.add_argument('--UNSUPERVISED_POTENTIAL_SCALING', type=float, nargs='?', default=0,
                         help='Will scale the potential by a random number sampled with mean 1 standard deviation UNSUPERVISED_POTENTIAL_SCALING. A value greater than one will have the tendancy of making the potentials larger. If zero is provided, will not scale. If a negative number is provided, will turn off potential. Default is 0.')
+    parser.add_argument('--UNSUPERVISED_TIME_INCREASE_RATE', type=float, nargs='?', default=0,
+                        help='The rate at which the RAND_MAX_TIME attribute will increase by each epoch. For example to increase by 0.1 each 100 epochs set to 1e-4. Defaults to zero.')
     parser.add_argument('--DYNAMIC_LR_USE_TRAINING_LOSS', action='store_true',
                         help='Will use training loss instead of validation loss for ReduceLROnPlateau. Allows us to train data when the validation domain doesn\'t match the training domain.')
 
