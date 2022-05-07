@@ -4,6 +4,7 @@ from utils.numerical_schrodinger import numerical_schrodinger
 from utils.batch_interpolate import batch_interp
 import scipy.interpolate
 import random
+from ray.tune.suggest.dragonfly import DragonflySearch
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -111,11 +112,11 @@ class SchrodingerDataset(torch.utils.data.Dataset):
             x_real = initials[0, :, c]
             x_imag = initials[1, :, c]
             x_potl = initials[2, :, c]
-
-            if self.random_x_sampling:
-                x_position = xs_train_grid[b,c,a]
-            elif self.unsupervised:
+            
+            if self.unsupervised:
                 x_position = np.random.rand((1))[0]
+            elif self.random_x_sampling:
+                x_position = xs_train_grid[b,c,a]
             else:
                 x_position = xs_train_grid[b]
 
