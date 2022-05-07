@@ -346,7 +346,7 @@ def get_arguments():
     parser.add_argument('--UNSUPERVISED_POTENTIAL_SCALING', type=float, nargs='?', default=0,
                         help='Will scale the potential by a random number sampled with mean 1 standard deviation UNSUPERVISED_POTENTIAL_SCALING. A value greater than one will have the tendancy of making the potentials larger. If zero is provided, will not scale. If a negative number is provided, will turn off potential. Default is 0.')
     parser.add_argument('--UNSUPERVISED_TIME_INCREASE_RATE', type=float, nargs='?', default=0,
-                        help='The rate at which the RAND_MAX_TIME attribute will increase by each epoch. For example to increase by 0.1 each 100 epochs set to 1e-4. Defaults to zero.')
+                        help='The rate at which the RAND_MAX_TIME attribute will increase by each epoch. For example to increase by 0.1 each 100 epochs set to 1e-3. Defaults to zero.')
     parser.add_argument('--DYNAMIC_LR_USE_TRAINING_LOSS', action='store_true',
                         help='Will use training loss instead of validation loss for ReduceLROnPlateau. Allows us to train data when the validation domain doesn\'t match the training domain.')
 
