@@ -56,7 +56,7 @@ def get_model_save_path(epoch, output_directory):
     return os.path.join(output_directory, f'model_at_epoch_{epoch+1}.pt')
 
 
-def update_at_major(epoch, total_losses, component_losses, validation_losses, output_directory, params, model, optimiser, scheduler, ray_tune_checkpoint_dir_func=None):
+def update_at_major(epoch, total_losses, component_losses, validation_losses, learning_rate_drops, output_directory, params, model, optimiser, scheduler, ray_tune_checkpoint_dir_func=None):
     if ray_tune_checkpoint_dir_func == None:
         # Save checkpoint
         torch.save({
@@ -68,7 +68,8 @@ def update_at_major(epoch, total_losses, component_losses, validation_losses, ou
             'total_losses': total_losses,
             'component_losses': component_losses,
             'validation_losses': validation_losses,
-            'output_directory': output_directory
+            'output_directory': output_directory,
+            'learning_rate_drops': learning_rate_drops
         }, get_model_save_path(epoch, output_directory))
 
         # Plot losses
@@ -84,7 +85,14 @@ def update_at_major(epoch, total_losses, component_losses, validation_losses, ou
         plt.yscale('log')
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
-        plt.legend(['Total', 'MSE', 'dt', 'BCs', 'ICs', 'Norm.', 'Energy', 'Validation'])
+
+        # Plot learning rate drops
+        for lrd in learning_rate_drops:
+            eph, lr = lrd
+            if eph != 0:
+                plt.axvline(eph, color='#aaaaaa', lw=0.5)
+
+        plt.legend(['Total', 'MSE', 'dt', 'BCs', 'ICs', 'Norm.', 'Energy', 'Validation'])        
         plt.title(f'Losses at Epoch {(epoch+1)} with Loss {"{:.3e}".format(total_losses[-1])}')
         plt.savefig(os.path.join(output_directory, f'losses_at_epoch_{epoch+1}.pdf'))
         plt.close()
@@ -99,8 +107,14 @@ def update_at_major(epoch, total_losses, component_losses, validation_losses, ou
                 'total_losses': total_losses,
                 'component_losses': component_losses,
                 'validation_losses': validation_losses,
-                'output_directory': output_directory
+                'output_directory': output_directory,
+                'learning_rate_drops': learning_rate_drops
             }, os.path.join(checkpoint_dir, 'model.pt'))
+
+
+def get_current_lr(optm):
+    lrs = list(map(lambda param_group: float(param_group['lr']), optm.param_groups))
+    return np.mean(lrs)
 
 
 def train_model(params, output_directory, call_at_epoch=None, ray_tune_checkpoint_dir_func=None):
@@ -113,10 +127,12 @@ def train_model(params, output_directory, call_at_epoch=None, ray_tune_checkpoin
 
         model = SchrodingerModel(hidden_dim=params['HIDDEN_LAYER_SIZE'], num_layers=params['NUM_HIDDEN_LAYERS']).to(device)
         optm = torch.optim.Adam(model.parameters(), lr = params['LEARNING_RATE'])
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optm)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optm, verbose=True)
 
         starting_epoch = 0
 
+        learning_rate_drops = [(0, params['LEARNING_RATE'])]
+        
         total_losses = []
         component_losses = [[],[],[],[],[],[]]
         validation_losses = []
@@ -135,6 +151,12 @@ def train_model(params, output_directory, call_at_epoch=None, ray_tune_checkpoin
         scheduler.load_state_dict(checkpoint_data['scheduler_state_dict'])
 
         starting_epoch = checkpoint_data['epoch'] + 1
+
+        if 'learning_rate_drops' in checkpoint_data:
+            learning_rate_drops = checkpoint_data['learning_rate_drops']
+        else:
+            print('WARNING: \'learning_rate_drops\' variable not found. Continuing but lr drops might contain missing results.')
+            learning_rate_drops = [(starting_epoch, get_current_lr(optm))]
 
         total_losses = checkpoint_data['total_losses']
         component_losses = checkpoint_data['component_losses']
@@ -227,10 +249,17 @@ def train_model(params, output_directory, call_at_epoch=None, ray_tune_checkpoin
             with torch.no_grad():
                 validation_loss = F.mse_loss(model(validation_x.to(device)), validation_y.to(device))
         
+        # Use ReduceLROnPlateau scheduler
         if params['DYNAMIC_LR_USE_TRAINING_LOSS']:
             scheduler.step(epoch_loss)
         else:
             scheduler.step(validation_loss)
+
+        # See whether the learning rate dropped to track dynamic LR
+        old_lr = learning_rate_drops[-1][1]
+        curr_lr = get_current_lr(optm)
+        if curr_lr != old_lr:
+            learning_rate_drops.append((epoch, curr_lr))
         
         # Update running tally of losses
         total_losses.append(epoch_loss.detach().cpu().numpy())
@@ -251,7 +280,7 @@ def train_model(params, output_directory, call_at_epoch=None, ray_tune_checkpoin
 
         # Update at checkpoint
         if CHECKPOINT_FREQUENCY != 0 and (epoch+1) % CHECKPOINT_FREQUENCY == 0:
-            update_at_major(epoch, total_losses, component_losses, validation_losses, output_directory, params, model, optm, scheduler)
+            update_at_major(epoch, total_losses, component_losses, validation_losses, learning_rate_drops, output_directory, params, model, optm, scheduler)
 
 
     update_at_major(epoch, total_losses, component_losses, validation_losses, output_directory, params, model, optm, scheduler, ray_tune_checkpoint_dir_func)
