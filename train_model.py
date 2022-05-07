@@ -7,6 +7,7 @@ import time
 import json
 import numpy as np
 import pandas
+import sys
 import torch.nn.functional as F
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -48,52 +49,66 @@ def update_at_epoch(epoch, total_losses, component_losses, validation_losses, pr
     else:
         print('Epoch #{} *** Training Loss: {:.3e}; Validation Loss: {:.3e}; MSE Loss: {:.3e}'.format((epoch+1),total_losses[-1], validation_losses[-1], component_losses[0][-1]))
 
-    progress_file.write(f'{(epoch+1)},{total_losses[-1]},{component_losses[0][-1]},{component_losses[1][-1]},{component_losses[2][-1]},{component_losses[3][-1]},{component_losses[4][-1]},{component_losses[5][-1]},{validation_losses}\n')
+    progress_file.write(f'{(epoch+1)},{total_losses[-1]},{component_losses[0][-1]},{component_losses[1][-1]},{component_losses[2][-1]},{component_losses[3][-1]},{component_losses[4][-1]},{component_losses[5][-1]},{validation_losses[-1]}\n')
     progress_file.flush()
 
 def get_model_save_path(epoch, output_directory):
     return os.path.join(output_directory, f'model_at_epoch_{epoch+1}.pt')
 
 
-def update_at_major(epoch, total_losses, component_losses, validation_losses, output_directory, params, model, optimiser):
-    # Save checkpoint
-    torch.save({
-        'epoch': epoch,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimiser.state_dict(),
-        'params': params,
-        'total_losses': total_losses,
-        'component_losses': component_losses,
-        'validation_losses': validation_losses
-    }, get_model_save_path(epoch, output_directory))
+def update_at_major(epoch, total_losses, component_losses, validation_losses, output_directory, params, model, optimiser, scheduler, ray_tune_checkpoint_dir_func=None):
+    if ray_tune_checkpoint_dir_func == None:
+        # Save checkpoint
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimiser.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'params': params,
+            'total_losses': total_losses,
+            'component_losses': component_losses,
+            'validation_losses': validation_losses,
+            'output_directory': output_directory
+        }, get_model_save_path(epoch, output_directory))
 
-    # Plot losses
-    plt.figure(figsize=(7,7))
-    plt.plot(total_losses)
-    plt.plot(component_losses[0] if not params['UNSUPERVISED_RANDOMISED'] else 0)
-    plt.plot(component_losses[1])
-    plt.plot(component_losses[2])
-    plt.plot(component_losses[3])
-    plt.plot(component_losses[4])
-    plt.plot(component_losses[5])
-    plt.plot(validation_losses)
-    plt.yscale('log')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend(['Total', 'MSE', 'dt', 'BCs', 'ICs', 'Norm.', 'Energy', 'Validation'])
-    plt.title(f'Losses at Epoch {(epoch+1)} with Loss {"{:.3e}".format(total_losses[-1])}')
-    plt.savefig(os.path.join(output_directory, f'losses_at_epoch_{epoch+1}.pdf'))
-    plt.close()
+        # Plot losses
+        plt.figure(figsize=(7,7))
+        plt.plot(total_losses)
+        plt.plot(component_losses[0] if not params['UNSUPERVISED_RANDOMISED'] else 0)
+        plt.plot(component_losses[1])
+        plt.plot(component_losses[2])
+        plt.plot(component_losses[3])
+        plt.plot(component_losses[4])
+        plt.plot(component_losses[5])
+        plt.plot(validation_losses)
+        plt.yscale('log')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend(['Total', 'MSE', 'dt', 'BCs', 'ICs', 'Norm.', 'Energy', 'Validation'])
+        plt.title(f'Losses at Epoch {(epoch+1)} with Loss {"{:.3e}".format(total_losses[-1])}')
+        plt.savefig(os.path.join(output_directory, f'losses_at_epoch_{epoch+1}.pdf'))
+        plt.close()
+    else:
+        with ray_tune_checkpoint_dir_func(epoch) as checkpoint_dir:
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimiser.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'params': params,
+                'total_losses': total_losses,
+                'component_losses': component_losses,
+                'validation_losses': validation_losses,
+                'output_directory': output_directory
+            }, os.path.join(checkpoint_dir, 'model.pt'))
 
 
-def train_model(params, output_directory, call_at_epoch=None):
+def train_model(params, output_directory, call_at_epoch=None, ray_tune_checkpoint_dir_func=None):
     if call_at_epoch != None and not callable(call_at_epoch):
         raise ValueError('call_at_epoch needs to be a function.')
 
-    CHECKPOINT_FREQUENCY = params['CHECKPOINT_FREQUENCY']
-
     if params['FROM_CHECKPOINT'] == None:
-        progress_file = open(os.path.join(output_directory, 'progress.txt'), 'w')
+        progress_file = open(os.path.join(output_directory, 'progress.csv'), 'w')
         progress_file.write('Epoch,Total Loss,MSE Loss,Diff. Loss,BC Loss,IC Loss,Norm. Loss,Energy Loss,Validation Loss\n')
 
         model = SchrodingerModel(hidden_dim=params['HIDDEN_LAYER_SIZE']).to(device)
@@ -107,11 +122,9 @@ def train_model(params, output_directory, call_at_epoch=None):
         validation_losses = []
 
     else:
-        progress_file = open(os.path.join(output_directory, 'progress.txt'), 'a')
+        progress_file = open(os.path.join(output_directory, 'progress.csv'), 'a')
 
         checkpoint_data = torch.load(params['FROM_CHECKPOINT'])
-
-        params = checkpoint_data['params']
 
         model = SchrodingerModel(hidden_dim=params['HIDDEN_LAYER_SIZE']).to(device)
         model.load_state_dict(checkpoint_data['model_state_dict'])
@@ -119,13 +132,21 @@ def train_model(params, output_directory, call_at_epoch=None):
         optm = torch.optim.Adam(model.parameters(), lr = params['LEARNING_RATE'])
         optm.load_state_dict(checkpoint_data['optimizer_state_dict'])
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optm)
+        scheduler.load_state_dict(checkpoint_data['scheduler_state_dict'])
 
-        starting_epoch = checkpoint_data['epoch']
+        starting_epoch = checkpoint_data['epoch'] + 1
 
         total_losses = checkpoint_data['total_losses']
         component_losses = checkpoint_data['component_losses']
-        validation_losses = validation_losses['validation_losses']
+        validation_losses = checkpoint_data['validation_losses']
 
+        print(f'Loading from checkpoint at {starting_epoch}.')
+        if params['UNSUPERVISED_RANDOMISED']:
+            print('Epoch #{} *** Training Loss: {:.3e}; Validation Loss: {:.3e}'.format((starting_epoch),total_losses[-1], validation_losses[-1]))
+        else:
+            print('Epoch #{} *** Training Loss: {:.3e}; Validation Loss: {:.3e}; MSE Loss: {:.3e}'.format((starting_epoch),total_losses[-1], validation_losses[-1], component_losses[0][-1]))
+
+    CHECKPOINT_FREQUENCY = params['CHECKPOINT_FREQUENCY']
 
     training_data, validation_x, validation_y = load_data(params['TRAINING_DATA'], params['VALIDATION_DATA'])
 
@@ -180,9 +201,11 @@ def train_model(params, output_directory, call_at_epoch=None):
                 x[:,202:] = torch.roll(x[:,202:], shifts=1, dims=0) + mix_cffs*torch.roll(x[:,202:], shifts=-1, dims=0)
 
                 # Potential scaling
-                if params['UNSUPERVISED_POTENTIAL_SCALING'] != 0:
+                if params['UNSUPERVISED_POTENTIAL_SCALING'] > 0:
                     scale_cffs = torch.normal(torch.zeros(batch_size, 1), params['UNSUPERVISED_POTENTIAL_SCALING']).to(device) + 1
                     x[:,202:] = scale_cffs * x[:,202:]
+                if params['UNSUPERVISED_POTENTIAL_SCALING'] < 0:
+                    x[:,202:] = 0
 
             optm.zero_grad()
             output = model(x)     
@@ -223,10 +246,10 @@ def train_model(params, output_directory, call_at_epoch=None):
 
         # Update at checkpoint
         if CHECKPOINT_FREQUENCY != 0 and (epoch+1) % CHECKPOINT_FREQUENCY == 0:
-            update_at_major(epoch, total_losses, component_losses, validation_losses, output_directory, params, model, optm)
+            update_at_major(epoch, total_losses, component_losses, validation_losses, output_directory, params, model, optm, scheduler)
 
 
-    update_at_major(epoch, total_losses, component_losses, validation_losses, output_directory, params, model, optm)
+    update_at_major(epoch, total_losses, component_losses, validation_losses, output_directory, params, model, optm, scheduler, ray_tune_checkpoint_dir_func)
     if exit_criteria == None:
         exit_criteria = "Max Epochs"
 
@@ -234,7 +257,16 @@ def train_model(params, output_directory, call_at_epoch=None):
 
 
 def get_arguments():
-    parser = argparse.ArgumentParser(description="Creates training data.")
+    if '--FROM_CHECKPOINT' in sys.argv:
+        parser = argparse.ArgumentParser(description="Trains model from checkpoint.")
+        parser.add_argument('--FROM_CHECKPOINT', type=str, nargs='?', default=None,
+                        help='Specify to continue training from a checkpoint.')
+        args = vars(parser.parse_args())
+        reduce_to_single_arguments(args)
+        print_arguments(args)
+        return args
+
+    parser = argparse.ArgumentParser(description="Trains model from training data.")
     parser.add_argument('TRAINING_DATA', type=str, nargs=1,
                         help='The training data to be used.')
     parser.add_argument('VALIDATION_DATA', type=str, nargs='?', default=None,
@@ -262,7 +294,7 @@ def get_arguments():
     parser.add_argument('--CHECKPOINT_FREQUENCY', type=int, nargs='?', default=10,
                         help='[Optional] Interval of checkpoints. For no checkpoints set to zero.')
     parser.add_argument('--FROM_CHECKPOINT', type=str, nargs='?', default=None,
-                        help='Specify to continue training from a checkpoint.')
+                        help='Specify to continue training from a checkpoint. All required arguments are ignored if this is specified.')
     parser.add_argument('--USE_AUTOGRAD', action='store_true',
                     help='Add this argument to use autograd. Warning: will use a lot of memory.')
     parser.add_argument('--UNSUPERVISED_RANDOMISED', action='store_true',
@@ -274,7 +306,7 @@ def get_arguments():
     parser.add_argument('--TRAINING_MIXING', action='store_true',
                         help='Will use global phase invariance to mix training data at each epoch. When combined with --UNSUPERVISED_RANDOMISED, will also take linear combinations of initial states and random combinations of potentials.')
     parser.add_argument('--UNSUPERVISED_POTENTIAL_SCALING', type=float, nargs='?', default=0,
-                        help='Will scale the potential by a random number sampled with mean 1 standard deviation UNSUPERVISED_POTENTIAL_SCALING. A value greater than one will have the tendancy of making the potentials larger. If zero is provided, will not scale. Default is 0.')
+                        help='Will scale the potential by a random number sampled with mean 1 standard deviation UNSUPERVISED_POTENTIAL_SCALING. A value greater than one will have the tendancy of making the potentials larger. If zero is provided, will not scale. If a negative number is provided, will turn off potential. Default is 0.')
 
     args = vars(parser.parse_args())
     reduce_to_single_arguments(args)
@@ -355,9 +387,18 @@ def main():
     params = get_arguments()
 
     # Create output directory
-    training_data_id = extract_training_data_id(params['TRAINING_DATA'])
-    output_dir = get_output_folder(training_data_id)
-    create_params_file(params, output_dir)
+    if params['FROM_CHECKPOINT'] == None:
+        training_data_id = extract_training_data_id(params['TRAINING_DATA'])
+        output_dir = get_output_folder(training_data_id)
+        create_params_file(params, output_dir)
+    else:
+        checkpoint_path = params['FROM_CHECKPOINT']
+        checkpoint_data = torch.load(checkpoint_path)
+        params = checkpoint_data['params']
+        output_dir = checkpoint_data['output_directory']
+        print('Loaded input arguments from checkpoint.')
+        params['FROM_CHECKPOINT'] = checkpoint_path
+        print_arguments(params)
 
     if device == "cuda":
         print(f"CUDA available. Using device \"{torch.cuda.get_device_name()}\".")

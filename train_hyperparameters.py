@@ -1,6 +1,5 @@
 import ray
 import ray.tune
-from ray.tune.suggest.bayesopt import BayesOptSearch
 import os
 import matplotlib.pyplot as plt
 from train_model import train_model, create_params_file, get_output_folder, extract_training_data_id
@@ -57,11 +56,14 @@ def call_at_epoch(epoch, total_losses, component_losses, validation_losses):
         validation_loss=validation_losses[-1]
     )
 
-def training_loop_wrapper(config):
-    print(os.getcwd())
+def training_loop_wrapper(config, checkpoint_dir):
     params = {**default_params, **config}
+
+    if checkpoint_dir == None:
+        params['FROM_CHECKPOINT'] = os.path.join(checkpoint_dir, 'model.pt')
+
     output_folder = get_output_folder(training_data_id)
-    train_model(params, output_folder, call_at_epoch)
+    train_model(params, output_folder, call_at_epoch, ray.tune.checkpoint_dir)
 
 def get_hyperparam_output_directory():
     if not os.path.isdir('hyperparam_tune'):
