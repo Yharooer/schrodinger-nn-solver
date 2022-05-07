@@ -119,8 +119,6 @@ def get_arguments():
                         help='The max time step.')
     parser.add_argument('--T_STEPS', type=int, nargs='?', default=50,
                         help='The max number of steps.')
-    parser.add_argument('--HIDDEN_LAYER_SIZE', type=int, nargs='?', default=500,
-                        help='The number of hidden layers.')
 
     args = vars(parser.parse_args())
     reduce_to_single_arguments(args)
@@ -133,7 +131,7 @@ def check_arguments(args):
     if not os.path.isfile(args['MODEL']):
         raise ValueError(f'Cannot find model file \'{args["MODEL"]}\'.')
 
-    check_args_positive_numbers(args, ['T_MAX', 'T_STEPS', 'HIDDEN_LAYER_SIZE'])
+    check_args_positive_numbers(args, ['T_MAX', 'T_STEPS'])
 
 
 def get_output_folder():
@@ -181,9 +179,15 @@ def main():
         mpl.font_manager.fontManager.addfont(font)
 
     # Load model
-    model_state_dict = torch.load(params['MODEL'])['model_state_dict']
-    model = SchrodingerModel(hidden_dim=params['HIDDEN_LAYER_SIZE']).to(device)
+    checkpoint = torch.load(params['MODEL'])
+    model_state_dict = checkpoint['model_state_dict']
+    hidden_dim = checkpoint['params']['HIDDEN_LAYER_SIZE']
+    num_layers = checkpoint['params']['NUM_HIDDEN_LAYERS'] if 'params' in checkpoint and 'NUM_HIDDEN_LAYERS' in checkpoint['params'] else 2
+
+    model = SchrodingerModel(hidden_dim=hidden_dim, num_layers=num_layers).to(device)
     model.load_state_dict(model_state_dict)
+
+    print(f"Loaded model with {num_layers} hidden layers with {hidden_dim} nodes each.")
 
     # Get output directory
     output_directory = get_output_folder()

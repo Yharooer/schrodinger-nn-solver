@@ -28,9 +28,7 @@ def get_arguments():
     parser.add_argument('--SIM_MAX_TIME', type=float, nargs='?', default=1.2,
                         help='(Optional) The maximum time to use when evolving states. Defaults to 1.2.')
     parser.add_argument('--ITERATIONS', type=int, nargs='?', default=5,
-                        help='(Optional) The number of iterations to take for each timestep. Defaults to 5.')
-    parser.add_argument('--HIDDEN_LAYER_SIZE', type=int, nargs='?', default=500,
-                        help='The number of hidden layers.')                 
+                        help='(Optional) The number of iterations to take for each timestep. Defaults to 5.')               
 
     args = vars(parser.parse_args())
     reduce_to_single_arguments(args)
@@ -49,7 +47,7 @@ def check_arguments(args):
     if args['TRUTH_GRID_SIZE'] != 0:
         raise NotImplementedError('Truth for large grid size not supported yet.')
 
-    check_args_positive_numbers(args, ['NUM_TIME_INTERVALS', 'SIM_MAX_TIME', 'MODEL_MAX_TIME', 'HIDDEN_LAYER_SIZE'])
+    check_args_positive_numbers(args, ['NUM_TIME_INTERVALS', 'SIM_MAX_TIME', 'MODEL_MAX_TIME'])
 
 
 def get_output_folder():
@@ -84,9 +82,15 @@ def main():
     params['MAX_TIME'] = params['SIM_MAX_TIME']
 
     # Load model
-    model_state_dict = torch.load(params['MODEL'])['model_state_dict']
-    model = SchrodingerModel(hidden_dim=params['HIDDEN_LAYER_SIZE']).to(device)
+    checkpoint = torch.load(params['MODEL'])
+    model_state_dict = checkpoint['model_state_dict']
+    hidden_dim = checkpoint['params']['HIDDEN_LAYER_SIZE']
+    num_layers = checkpoint['params']['NUM_HIDDEN_LAYERS'] if 'params' in checkpoint and 'NUM_HIDDEN_LAYERS' in checkpoint['params'] else 2
+
+    model = SchrodingerModel(hidden_dim=hidden_dim, num_layers=num_layers).to(device)
     model.load_state_dict(model_state_dict)
+
+    print(f"Loaded model with {num_layers} hidden layers with {hidden_dim} nodes each.")
 
     # Get output directory
     output_directory = get_output_folder()

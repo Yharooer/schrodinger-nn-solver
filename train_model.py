@@ -111,7 +111,7 @@ def train_model(params, output_directory, call_at_epoch=None, ray_tune_checkpoin
         progress_file = open(os.path.join(output_directory, 'progress.csv'), 'w')
         progress_file.write('Epoch,Total Loss,MSE Loss,Diff. Loss,BC Loss,IC Loss,Norm. Loss,Energy Loss,Validation Loss\n')
 
-        model = SchrodingerModel(hidden_dim=params['HIDDEN_LAYER_SIZE']).to(device)
+        model = SchrodingerModel(hidden_dim=params['HIDDEN_LAYER_SIZE'], num_layers=params['NUM_HIDDEN_LAYERS']).to(device)
         optm = torch.optim.Adam(model.parameters(), lr = params['LEARNING_RATE'])
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optm)
 
@@ -126,7 +126,7 @@ def train_model(params, output_directory, call_at_epoch=None, ray_tune_checkpoin
 
         checkpoint_data = torch.load(params['FROM_CHECKPOINT'])
 
-        model = SchrodingerModel(hidden_dim=params['HIDDEN_LAYER_SIZE']).to(device)
+        model = SchrodingerModel(hidden_dim=params['HIDDEN_LAYER_SIZE'], num_layers=params['NUM_HIDDEN_LAYERS']).to(device)
         model.load_state_dict(checkpoint_data['model_state_dict'])
 
         optm = torch.optim.Adam(model.parameters(), lr = params['LEARNING_RATE'])
@@ -289,8 +289,10 @@ def get_arguments():
                         help='[Optional] Batch size to use during training. Defaults to 1000.')
     parser.add_argument('--MAX_EPOCHS', type=int, nargs='?', default=1000,
                         help='[Optional] Max number of epochs. Defaults to 1000.')
-    parser.add_argument('--HIDDEN_LAYER_SIZE', type=float, nargs='?', default=500,
-                        help='[Optional] Size of the two hidden layers. Defaults to 500.')
+    parser.add_argument('--HIDDEN_LAYER_SIZE', type=int, nargs='?', default=500,
+                        help='[Optional] Size of each hidden layer. Defaults to 500.')
+    parser.add_argument('--NUM_HIDDEN_LAYERS', type=int, nargs='?', default=2,
+                        help='[Optional] Number of hidden layers. Defaults to 2.')
     parser.add_argument('--CHECKPOINT_FREQUENCY', type=int, nargs='?', default=10,
                         help='[Optional] Interval of checkpoints. For no checkpoints set to zero.')
     parser.add_argument('--FROM_CHECKPOINT', type=str, nargs='?', default=None,
@@ -337,7 +339,7 @@ def check_arguments(args):
 
     # TODO parsing checkpoint argument - in theory only need to specify an integer.
 
-    check_args_positive_numbers(args, ['LEARNING_RATE', 'BATCH_SIZE', 'MAX_EPOCHS', 'HIDDEN_LAYER_SIZE'])
+    check_args_positive_numbers(args, ['LEARNING_RATE', 'BATCH_SIZE', 'MAX_EPOCHS', 'HIDDEN_LAYER_SIZE', 'NUM_HIDDEN_LAYERS'])
 
     if args['CHECKPOINT_FREQUENCY'] < 0:
         raise ValueError('CHECKPOINT_FREQUENCY must be a positive integer or zero.')
