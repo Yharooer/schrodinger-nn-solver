@@ -4,7 +4,6 @@ from utils.numerical_schrodinger import numerical_schrodinger
 from utils.batch_interpolate import batch_interp
 import scipy.interpolate
 import random
-from ray.tune.suggest.dragonfly import DragonflySearch
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
