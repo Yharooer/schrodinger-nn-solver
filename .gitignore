@@ -4,6 +4,9 @@ training_data/
 hyperparam_tune/
 model_evals/
 google_results/
+kiiara_2_results/
+figure_gen/*.pdf
+figure_gen/*.pgf
 performance/
 *:Zone.Identifier
 
