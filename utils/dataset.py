@@ -4,6 +4,9 @@ from utils.numerical_schrodinger import numerical_schrodinger
 from utils.batch_interpolate import batch_interp
 import scipy.interpolate
 import random
+from tqdm import tqdm
+
+import matplotlib.pyplot as plt
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -11,7 +14,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 # a SchrodingerDataset object cause right now we are passing way too many arguments
 # into this when all we want to do is load the dataset.
 class SchrodingerDataset(torch.utils.data.Dataset):
-    def __init__(self, simulation_grid_size, training_grid_size, fourier_modes, potential_degree, max_time, ntimes, num_initials, random_x_sampling=None, random_t_sampling=None, number_t_subsamples=1000, unsupervised=None):
+    def __init__(self, simulation_grid_size, training_grid_size, fourier_modes, potential_degree, max_time, ntimes, num_initials, random_x_sampling=None, random_t_sampling=None, potential_scale_factor=0, batch_time_eval_size=1000, unsupervised=None):
         self.simulation_grid_size = simulation_grid_size
         self.training_grid_size = training_grid_size
         self.fourier_modes = fourier_modes
@@ -21,7 +24,8 @@ class SchrodingerDataset(torch.utils.data.Dataset):
         self.num_initials = num_initials
         self.random_x_sampling = random_x_sampling
         self.random_t_sampling = random_t_sampling
-        self.number_t_subsamples = number_t_subsamples
+        self.potential_scale_factor = potential_scale_factor
+        self.batch_time_eval_size = batch_time_eval_size
         self.unsupervised = unsupervised
 
         self.num_data = num_initials*ntimes*training_grid_size
@@ -56,15 +60,47 @@ class SchrodingerDataset(torch.utils.data.Dataset):
             initials[1, :, i] = psi0_imag.T
             initials[2, :, i] = v.T
 
-        if self.random_t_sampling:
-            ts = np.linspace(0, self.max_time, self.number_t_subsamples)
-        else:
-            ts = np.linspace(0, self.max_time, self.ntimes)
+        ts = np.linspace(0, self.max_time, self.ntimes)
 
         print('Done generating initial states. Time evolving.')
 
         if not self.unsupervised:
-            integrated = numerical_schrodinger(initials, ts, self.simulation_grid_size, 1)
+
+            # If random_t_sample then do in batches. Otherwise do all at once.
+            if self.random_t_sampling:
+                
+                if self.ntimes > self.batch_time_eval_size:
+                    print('WARNING: NUM_TIME_STEPS is larger than BATCH_TIME_EVAL_SIZE. We will do in batches in size NUM_TIME_STEPS.')
+                
+                num_initals_per_batch = int(np.max([1,np.floor(self.batch_time_eval_size / self.ntimes)]))
+                num_batches = int(np.ceil(self.num_initials / num_initals_per_batch))
+                
+                integrated = np.zeros((2, self.simulation_grid_size, self.num_initials, self.ntimes))
+                random_t_value = np.zeros((self.num_initials, self.ntimes))
+
+                print('Starting numerical integration.')
+                for i in tqdm(range(num_batches)):
+                    start_index = i*num_initals_per_batch
+                    end_index = np.min([self.num_initials,start_index+num_initals_per_batch])
+                    
+                    ts = np.random.rand((end_index - start_index)*self.ntimes)*self.max_time
+                    sorted_ts = np.sort(ts)
+                    argsort_ts = np.argsort(ts)
+
+                    integrated_batch = numerical_schrodinger(initials[:,:,start_index:end_index], sorted_ts, self.simulation_grid_size, 1)
+
+                    # I'm sorry if this is slow.
+                    for j in range(end_index-start_index):
+                        start_time_index = j*self.ntimes
+                        time_indices = argsort_ts[start_time_index:start_time_index+self.ntimes]
+                        integrated[:,:,i*num_initals_per_batch+j,:] = integrated_batch[:,:,j,time_indices]
+                        random_t_value[i*num_initals_per_batch+j,:] = sorted_ts[time_indices]
+
+                print('Finished numerical integration.')
+            else:
+                print('Starting numerical integration.')
+                integrated = numerical_schrodinger(initials, ts, self.simulation_grid_size, 1)
+                print('Finished numerical integration.')
 
             # Scale down target from simulation grid size to training grid size.
             if not self.random_x_sampling:
@@ -75,19 +111,19 @@ class SchrodingerDataset(torch.utils.data.Dataset):
 
             if self.random_x_sampling:
                 integrated_tmp = np.swapaxes(integrated, 1, 3)
-                integrated_tmp = np.reshape(integrated_tmp, (2*self.num_initials*len(ts), self.simulation_grid_size))
+                integrated_tmp = np.reshape(integrated_tmp, (2*self.num_initials*self.ntimes, self.simulation_grid_size))
                 
-                xs_train_grid = np.random.rand(self.training_grid_size, self.num_initials, len(ts))
+                xs_train_grid = np.random.rand(self.training_grid_size, self.num_initials, self.ntimes)
 
-                xs_train_grid_tmp = np.zeros((2, self.training_grid_size, self.num_initials, len(ts)))
+                xs_train_grid_tmp = np.zeros((2, self.training_grid_size, self.num_initials, self.ntimes))
                 xs_train_grid_tmp[0,:,:,:] = xs_train_grid
                 xs_train_grid_tmp[1,:,:,:] = xs_train_grid
                 
-                xs_train_grid_reshape = np.reshape(np.swapaxes(xs_train_grid_tmp, 1, 3), (2*self.num_initials*len(ts), self.training_grid_size))
+                xs_train_grid_reshape = np.reshape(np.swapaxes(xs_train_grid_tmp, 1, 3), (2*self.num_initials*self.ntimes, self.training_grid_size))
 
                 integrated_tmp = batch_interp(torch.tensor(integrated_tmp).to(device), torch.tensor(xs_train_grid_reshape).to(device)).cpu().numpy()
 
-                integrated_tmp = np.reshape(integrated_tmp, (2, len(ts), self.num_initials, self.training_grid_size))
+                integrated_tmp = np.reshape(integrated_tmp, (2, self.ntimes, self.num_initials, self.training_grid_size))
                 integrated = np.swapaxes(integrated_tmp, 1, 3)
         else:
             integrated = None
@@ -100,13 +136,11 @@ class SchrodingerDataset(torch.utils.data.Dataset):
 
         self.data = []
 
-        for i in range(self.num_data):
+        print('Compiling dataset from numerical integration.')
+        for i in tqdm(range(self.num_data)):
             a = i % self.ntimes                              # time index
             b = int(i/self.ntimes) % self.training_grid_size # space index
             c = int(i/self.ntimes/self.training_grid_size)   # psi0 index
-
-            if self.random_t_sampling:
-                a = random.randrange(0, self.number_t_subsamples)
 
             x_real = initials[0, :, c]
             x_imag = initials[1, :, c]
@@ -119,7 +153,12 @@ class SchrodingerDataset(torch.utils.data.Dataset):
             else:
                 x_position = xs_train_grid[b]
 
-            x = np.concatenate((np.array([x_position, ts[a]]), x_real, x_imag, x_potl))
+            if self.random_t_sampling:
+                t_value = random_t_value[c,a]
+            else:
+                t_value = ts[a]
+
+            x = np.concatenate((np.array([x_position, t_value]), x_real, x_imag, x_potl))
 
             if self.unsupervised:
                 y = np.array([0,0])
@@ -133,6 +172,8 @@ class SchrodingerDataset(torch.utils.data.Dataset):
             y = torch.tensor(y).float()
 
             self.data.append([x, y])
+
+        print('Done compiling dataset.')
 
     def __len__(self):
         return self.num_data
@@ -165,6 +206,11 @@ class SchrodingerDataset(torch.utils.data.Dataset):
 
         if self.potential_degree >= 0:
             v_cffs = np.random.normal(size=(self.potential_degree+1))
+        
+            if self.potential_scale_factor > 0:
+                scale_factor = np.random.normal(1, self.potential_scale_factor) + 1
+                v_cffs = v_cffs * scale_factor
+
             v_cffs_mesh = np.outer(v_cffs, np.ones(self.simulation_grid_size))
 
         def potential_function(x):

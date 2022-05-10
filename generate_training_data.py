@@ -23,8 +23,6 @@ def get_arguments():
                         help='[Optional] Number of Fourier modes to be used to generate the initial state. Defaults to 8.')
     parser.add_argument('--NUM_POTENTIAL_DEGREE', type=int, nargs='?', default=8,
                         help='[Optional] Number of the highest degree polynomial to be used to generate the potential. Defaults to 8. Set to -1 to turn off potential.')
-    parser.add_argument('--NUM_MAX_FOURIER_MODES', type=int, nargs='?', default=0,
-                        help='Reserved')
     parser.add_argument('--SIMULATION_GRID_SIZE', type=int, nargs='?', default=100,
                         help='[Optional] Size of the grid to do numerical simulations on. Defaults to 100.')
     parser.add_argument('--TRAINING_GRID_SIZE', type=int, nargs='?', default=100,
@@ -33,8 +31,10 @@ def get_arguments():
                         help='Add this argument to sample wavefunction at random positions.')
     parser.add_argument('--RANDOM_T_SAMPLING', action='store_true',
                         help='Add this argument to sample wavefunction at points in time.')
-    parser.add_argument('--NUMBER_T_SUBSAMPLES', type=int, nargs='?', default=1000,
-                        help='The number of subsamples to randomise from when performing random time sampling.')
+    parser.add_argument('--BATCH_TIME_EVAL_SIZE', type=int, nargs='?', default=1000,
+                        help='Number of times to evaluate in one go. Only for use with RANDOM_T_SAMPLING. Defaults to 1000.')
+    parser.add_argument('--POTENTIAL_SCALE_FACTOR', type=float, nargs='?', default=0,
+                        help='Will scale the potential by a random number sampled with mean 1 standard deviation UNSUPERVISED_POTENTIAL_SCALING. A value greater than one will have the tendancy of making the potentials larger. If zero is provided, will not scale.')
     parser.add_argument('--UNSUPERVISED', action='store_true',
                         help='Add this argument and will only generate initial states. Will generate empty target.')
 
@@ -46,14 +46,10 @@ def get_arguments():
 
 
 def check_arguments(args):
-    if args['NUM_MAX_FOURIER_MODES'] != 0:
-        raise NotImplementedError(
-            'Lower weight higher order Fourier modes not yet supported.')
-
     if args['VALIDATION_TIME_INTERVAL'] < 0:
         args['VALIDATION_TIME_INTERVAL'] = args['TIME_INTERVAL']
 
-    check_args_positive_numbers(args, ['TIME_INTERVAL', 'NUM_TIME_STEPS', 'NUM_INITIAL_STATES', 'NUM_FOURIER_MODES', 'TRAINING_GRID_SIZE', 'SIMULATION_GRID_SIZE', 'VALIDATION_TIME_INTERVAL', 'NUMBER_T_SUBSAMPLES'])
+    check_args_positive_numbers(args, ['TIME_INTERVAL', 'NUM_TIME_STEPS', 'NUM_INITIAL_STATES', 'NUM_FOURIER_MODES', 'TRAINING_GRID_SIZE', 'SIMULATION_GRID_SIZE', 'VALIDATION_TIME_INTERVAL', 'BATCH_TIME_EVAL_SIZE'])
 
 
 def get_output_folder():
@@ -94,7 +90,8 @@ def main():
         num_initials=params['NUM_INITIAL_STATES'],
         random_x_sampling=params['RANDOM_X_SAMPLING'],
         random_t_sampling=params['RANDOM_T_SAMPLING'],
-        number_t_subsamples=params['NUMBER_T_SUBSAMPLES'],
+        potential_scale_factor=params['POTENTIAL_SCALE_FACTOR'],
+        batch_time_eval_size=params['BATCH_TIME_EVAL_SIZE'],
         unsupervised=params['UNSUPERVISED']
     )
 
@@ -102,6 +99,7 @@ def main():
     start = time.perf_counter()
     dataset.initialise()
     end = time.perf_counter()
+    print('Finished generating training data!\n')
 
     # Generate validation data
     print('Generating validation data. This may take a while...')
@@ -115,11 +113,13 @@ def main():
         num_initials=50,
         random_x_sampling=False,
         random_t_sampling=False,
+        potential_scale_factor=params['POTENTIAL_SCALE_FACTOR'],
         unsupervised=False
     )
     validation_dataset.initialise()
     validation_dataloader = torch.utils.data.DataLoader(validation_dataset, batch_size=1000, shuffle=True)
     validation_x, validation_y = next(iter(validation_dataloader))
+    print('Finished generating validation data!\n')
 
     # Update params with final time
     params['TIME_TAKEN_SECONDS'] = end-start
