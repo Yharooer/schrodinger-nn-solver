@@ -435,7 +435,7 @@ def main():
         create_params_file(params, output_dir)
     else:
         checkpoint_path = params['FROM_CHECKPOINT']
-        checkpoint_data = torch.load(checkpoint_path)
+        checkpoint_data = torch.load(checkpoint_path, map_location=torch.device(device))
         params = checkpoint_data['params']
         output_dir = checkpoint_data['output_directory']
         print('Loaded input arguments from checkpoint.')

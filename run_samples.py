@@ -204,7 +204,7 @@ def main():
     params = get_arguments()
 
     # Load model
-    checkpoint = torch.load(params['MODEL'])
+    checkpoint = torch.load(params['MODEL'], map_location=torch.device(device))
     model_state_dict = checkpoint['model_state_dict']
     hidden_dim = checkpoint['params']['HIDDEN_LAYER_SIZE']
     num_layers = checkpoint['params']['NUM_HIDDEN_LAYERS'] if 'params' in checkpoint and 'NUM_HIDDEN_LAYERS' in checkpoint['params'] else 2
