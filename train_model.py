@@ -127,7 +127,11 @@ def train_model(params, output_directory, call_at_epoch=None, ray_tune_checkpoin
 
         model = SchrodingerModel(hidden_dim=params['HIDDEN_LAYER_SIZE'], num_layers=params['NUM_HIDDEN_LAYERS']).to(device)
         optm = torch.optim.Adam(model.parameters(), lr = params['LEARNING_RATE'])
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optm, verbose=True)
+
+        if params['NO_REDUCE_LR']:
+            scheduler = None
+        else:
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optm, min_lr=params['MINIMUM_LEARNING_RATE'], verbose=True)
 
         starting_epoch = 0
 
@@ -145,10 +149,20 @@ def train_model(params, output_directory, call_at_epoch=None, ray_tune_checkpoin
         model = SchrodingerModel(hidden_dim=params['HIDDEN_LAYER_SIZE'], num_layers=params['NUM_HIDDEN_LAYERS']).to(device)
         model.load_state_dict(checkpoint_data['model_state_dict'])
 
-        optm = torch.optim.Adam(model.parameters(), lr = params['LEARNING_RATE'])
-        optm.load_state_dict(checkpoint_data['optimizer_state_dict'])
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optm)
-        scheduler.load_state_dict(checkpoint_data['scheduler_state_dict'])
+        if params['RESET_OPTIMISER']:
+            optm = torch.optim.Adam(model.parameters(), lr = params['LEARNING_RATE'])
+            if params['NO_REDUCE_LR']:
+                scheduler = None
+            else:
+                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optm, min_lr=params['MINIMUM_LEARNING_RATE'], verbose=True)
+        else:
+            optm = torch.optim.Adam(model.parameters(), lr = params['LEARNING_RATE'])
+            optm.load_state_dict(checkpoint_data['optimizer_state_dict'])
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optm)
+            scheduler.load_state_dict(checkpoint_data['scheduler_state_dict'])
+
+            # Override the minimum learning rate in case it was changed in the arguments.
+            scheduler.min_lrs = [params['MINIMUM_LEARNING_RATE']*len(optm.param_groups)]
 
         starting_epoch = checkpoint_data['epoch'] + 1
 
@@ -252,10 +266,11 @@ def train_model(params, output_directory, call_at_epoch=None, ray_tune_checkpoin
                 validation_loss = F.mse_loss(model(validation_x.to(device)), validation_y.to(device))
         
         # Use ReduceLROnPlateau scheduler
-        if params['DYNAMIC_LR_USE_TRAINING_LOSS']:
-            scheduler.step(epoch_loss)
-        else:
-            scheduler.step(validation_loss)
+        if scheduler != None:
+            if params['DYNAMIC_LR_USE_TRAINING_LOSS']:
+                scheduler.step(epoch_loss)
+            else:
+                scheduler.step(validation_loss)
 
         # See whether the learning rate dropped to track dynamic LR
         old_lr = learning_rate_drops[-1][1]
@@ -293,16 +308,18 @@ def train_model(params, output_directory, call_at_epoch=None, ray_tune_checkpoin
 
 
 def get_arguments():
-    if '--FROM_CHECKPOINT' in sys.argv:
-        parser = argparse.ArgumentParser(description="Trains model from checkpoint.")
-        parser.add_argument('--FROM_CHECKPOINT', type=str, nargs='?', default=None,
-                        help='Specify to continue training from a checkpoint.')
+    if '--RESUME_FROM_CHECKPOINT' in sys.argv:
+        parser = argparse.ArgumentParser(description="Trains model from checkpoint with the same parameters.")
+        parser.add_argument('--RESUME_FROM_CHECKPOINT', type=str, nargs='?', default=None,
+                        help='Specify to continue training from a checkpoint with the same parameters. Other arguments cannot be present if this is used.')
         args = vars(parser.parse_args())
         reduce_to_single_arguments(args)
         print_arguments(args)
         return args
 
     parser = argparse.ArgumentParser(description="Trains model from training data.")
+
+    # Required arguments
     parser.add_argument('TRAINING_DATA', type=str, nargs=1,
                         help='The training data to be used.')
     parser.add_argument('VALIDATION_DATA', type=str, nargs='?', default=None,
@@ -319,22 +336,40 @@ def get_arguments():
                         help='Hyperparameter for normalisation condition in the loss function.')
     parser.add_argument('HYPERPARAM_ENERGY', type=float, nargs=1,
                         help='Hyperparameter for conservation of energy in the loss function.')
+    
+    # Arguments concerning training hyperparameters.
     parser.add_argument('--LEARNING_RATE', type=float, nargs='?', default=0.001,
                         help='[Optional] Learning rate to be used with Adam optimiser. Defaults to 0.001.')
     parser.add_argument('--BATCH_SIZE', type=float, nargs='?', default=1000,
                         help='[Optional] Batch size to use during training. Defaults to 1000.')
     parser.add_argument('--MAX_EPOCHS', type=int, nargs='?', default=1000,
                         help='[Optional] Max number of epochs. Defaults to 1000.')
+
+    # Arguments concerning ReduceLROnPlateau and the optimiser.
+    parser.add_argument('--DYNAMIC_LR_USE_TRAINING_LOSS', action='store_true',
+                        help='Will use training loss instead of validation loss for ReduceLROnPlateau. Allows us to train data when the validation domain doesn\'t match the training domain.')
+    parser.add_argument('--RESET_OPTIMISER', action='store_true',
+                        help='Will reset the state of the optimiser and the scheduler.')
+    parser.add_argument('--NO_REDUCE_LR', action='store_true',
+                        help='Will not used ReduceLROnPlateau.')
+    parser.add_argument('--MINIMUM_LEARNING_RATE', type=float, nargs='?', default=0,
+                        help='The minimum learning rate which ReduceLROnPlateau will use.')
+
+    # Arguments concerning the model hyperparameters.
     parser.add_argument('--HIDDEN_LAYER_SIZE', type=int, nargs='?', default=500,
                         help='[Optional] Size of each hidden layer. Defaults to 500.')
     parser.add_argument('--NUM_HIDDEN_LAYERS', type=int, nargs='?', default=2,
                         help='[Optional] Number of hidden layers. Defaults to 2.')
+    
+    # Arguments concerning checkpointing.
     parser.add_argument('--CHECKPOINT_FREQUENCY', type=int, nargs='?', default=10,
                         help='[Optional] Interval of checkpoints. For no checkpoints set to zero.')
     parser.add_argument('--FROM_CHECKPOINT', type=str, nargs='?', default=None,
-                        help='Specify to continue training from a checkpoint. All required arguments are ignored if this is specified.')
-    parser.add_argument('--USE_AUTOGRAD', action='store_true',
-                    help='Add this argument to use autograd. Warning: will use a lot of memory.')
+                        help='Specify to continue training from a checkpoint with different training parameters. All arguments must be respecified. Allows for piecewise training of with different parameters.')
+    parser.add_argument('--RESUME_FROM_CHECKPOINT', type=str, nargs='?', default=None,
+                        help='Specify to continue training from a checkpoint with the same parameters. Must be specified on its own; all other arguments are ignored when this is specified.')
+
+    # Arguments concerning randomisation during training.
     parser.add_argument('--UNSUPERVISED_RANDOMISED', action='store_true',
                         help='For unsupervised dataset, will randomise positions and times.')
     parser.add_argument('--RAND_MAX_TIME', type=float, nargs='?', default=0,
@@ -347,9 +382,12 @@ def get_arguments():
                         help='Will scale the potential by a random number sampled with mean 1 standard deviation UNSUPERVISED_POTENTIAL_SCALING. A value greater than one will have the tendancy of making the potentials larger. If zero is provided, will not scale. If a negative number is provided, will turn off potential. Default is 0.')
     parser.add_argument('--UNSUPERVISED_TIME_INCREASE_RATE', type=float, nargs='?', default=0,
                         help='The rate at which the RAND_MAX_TIME attribute will increase by each epoch. For example to increase by 0.1 each 100 epochs set to 1e-3. Defaults to zero.')
-    parser.add_argument('--DYNAMIC_LR_USE_TRAINING_LOSS', action='store_true',
-                        help='Will use training loss instead of validation loss for ReduceLROnPlateau. Allows us to train data when the validation domain doesn\'t match the training domain.')
 
+    # Argument concerning method of calculating derivatives.
+    parser.add_argument('--USE_AUTOGRAD', action='store_true',
+                    help='Add this argument to use autograd. May use a lot of memory.')
+                    
+    
     args = vars(parser.parse_args())
     reduce_to_single_arguments(args)
     check_arguments(args)
@@ -428,17 +466,42 @@ def create_params_file(args, directory):
 def main():
     params = get_arguments()
 
+    # Check if FROM_CHECKPOINT is specified if we are given conflicting HIDDEN_LAYER_SIZE or NUM_HIDDEN_LAYERS.
+    # Check if RESET_OPTIMISER is not set is there are differences in the learning rates.
+    if 'FROM_CHECKPOINT' in params and params['FROM_CHECKPOINT'] != None:
+        checkpoint_path = params['FROM_CHECKPOINT']
+        checkpoint_data = torch.load(checkpoint_path, map_location=torch.device(device))
+        checkpoint_params = checkpoint_data['params']
+
+        if checkpoint_params['HIDDEN_LAYER_SIZE'] != params['HIDDEN_LAYER_SIZE']:
+            print(f"WARNING: The argument HIDDEN_LAYER_SIZE specified ({params['HIDDEN_LAYER_SIZE']}) does not match the argument HIDDEN_LAYER_SIZE of the checkpoint data ({checkpoint_params['HIDDEN_LAYER_SIZE']}). We continue using the value specified by the checkpoint data.")
+            params['HIDDEN_LAYER_SIZE'] = checkpoint_params['HIDDEN_LAYER_SIZE']
+        
+        if checkpoint_params['NUM_HIDDEN_LAYERS'] != params['NUM_HIDDEN_LAYERS']:
+            print(f"WARNING: The argument NUM_HIDDEN_LAYERS specified ({params['NUM_HIDDEN_LAYERS']}) does not match the argument NUM_HIDDEN_LAYERS of the checkpoint data ({checkpoint_params['NUM_HIDDEN_LAYERS']}). We continue using the value specified by the checkpoint data.")
+            params['NUM_HIDDEN_LAYERS'] = checkpoint_params['NUM_HIDDEN_LAYERS']
+
+        if not params['RESET_OPTIMISER']:
+            if checkpoint_params['LEARNING_RATE'] != params['LEARNING_RATE']:
+                print(f"WARNING: The argument RESET_OPTIMISER was not provided and the argument LEARNING_RATE differs from the checkpoint data and the command line arguments. This may result in unintended behaviour such as the learning rate not changing.")
+            if 'NO_REDUCE_LR' in checkpoint_params and checkpoint_params['NO_REDUCE_LR'] != params['NO_REDUCE_LR']:
+                print(f"WARNING: The argument RESET_OPTIMISER was not provided and the argument NO_REDUCE_LR differs between the checkpoint data and the command line arguments. This may result in unintended behaviour of ReduceLROnPlateau.")
+
+        print('Continuing with new parameters from checkpoint. The parameters we will use are:')
+        print_arguments(params)
+
     # Create output directory
-    if params['FROM_CHECKPOINT'] == None:
+    if params['RESUME_FROM_CHECKPOINT'] == None:
         training_data_id = extract_training_data_id(params['TRAINING_DATA'])
         output_dir = get_output_folder(training_data_id)
         create_params_file(params, output_dir)
     else:
-        checkpoint_path = params['FROM_CHECKPOINT']
+        checkpoint_path = params['RESUME_FROM_CHECKPOINT']
         checkpoint_data = torch.load(checkpoint_path, map_location=torch.device(device))
         params = checkpoint_data['params']
         output_dir = checkpoint_data['output_directory']
         print('Loaded input arguments from checkpoint.')
+        params['RESUME_FROM_CHECKPOINT'] = checkpoint_path
         params['FROM_CHECKPOINT'] = checkpoint_path
         print_arguments(params)
 
