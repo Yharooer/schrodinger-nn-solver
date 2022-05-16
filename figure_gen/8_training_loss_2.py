@@ -25,8 +25,8 @@ fig = plt.figure(figsize=(4.0,4.5))
 for d in LOSS_DROPS:
     plt.axvline(d,color='#808080', linewidth='1')
 
-val_handle = plt.plot(df['Epoch'], df['Validation Loss']/10, color='#808080') 
-dt_handle = plt.plot(df['Epoch'], df['Diff. Loss']/5, color='#00b35a')
+val_handle = plt.plot(df['Epoch'], df['Validation Loss'], color='#808080') 
+dt_handle = plt.plot(df['Epoch'], df['Diff. Loss'], color='#00b35a')
 ic_handle = plt.plot(df['Epoch'], df['IC Loss'], color='#ff0080')
 bc_handle = plt.plot(df['Epoch'], df['BC Loss'], color='#ff8000')
 tot_handle = plt.plot(df['Epoch'], df['Total Loss'], color='#0000ff')
