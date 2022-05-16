@@ -8,6 +8,12 @@ kiiara_2_results/
 figure_gen/*.pdf
 figure_gen/*.pgf
 performance/
+figure_gen/*.pdf
+figure_gen/*.mp4
+figure_gen/*.csv
+figure_gen/*.npy
+figure_gen/*.pgf
+figure_gen/the_training_losses
 *:Zone.Identifier
 
 # Byte-compiled / optimized / DLL files

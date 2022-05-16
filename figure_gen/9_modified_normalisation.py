@@ -19,9 +19,8 @@ import json
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-SUPERVISED_MODEL = 'google_results/models/55/3/model_at_epoch_720.pt'
-#SUPERVISED_MODEL = 'google_results/models/57/2/model_at_epoch_720.pt'
-UNSUPERVISED_MODEL = 'google_results/models/49/1/model_at_epoch_760.pt'
+CONTROL_MODEL = 'google_results/models/90/12/model_at_epoch_900.pt'
+MODIFIED_MODEL = 'google_results/models/90/25/model_at_epoch_4070.pt'
 
 def solve_single_numerically(psi0, v, ts, grid_size=100):
     xs_num = np.linspace(0,1,grid_size)
@@ -67,7 +66,7 @@ def solve_single_nn(model, psi0, v, ts, grid_size=100):
 
 def test_model(sup_model, psi0, v, t_max):
     
-    checkpoint = torch.load(UNSUPERVISED_MODEL, map_location=torch.device('cpu'))
+    checkpoint = torch.load(MODIFIED_MODEL, map_location=torch.device('cpu'))
     model_state_dict = checkpoint['model_state_dict']
     hidden_dim = checkpoint['params']['HIDDEN_LAYER_SIZE']
     num_layers = checkpoint['params']['NUM_HIDDEN_LAYERS'] if 'params' in checkpoint and 'NUM_HIDDEN_LAYERS' in checkpoint['params'] else 2
@@ -75,12 +74,7 @@ def test_model(sup_model, psi0, v, t_max):
     unsup_model = SchrodingerModel(hidden_dim=hidden_dim, num_layers=num_layers).to(device)
     unsup_model.load_state_dict(model_state_dict)
 
-    ts = [0.0, 0.1, 0.2, 0.3]
-
-    # Solve numerically
-    print('Solving numerically...')
-    num_ys_real,num_ys_imag = solve_single_numerically(psi0, v, ts, 100)
-    print('Finished solving numerically.')
+    ts = np.linspace(0,0.4,100)
    
     # Solve using our method
     print('Solving supervised nn...')
@@ -92,7 +86,9 @@ def test_model(sup_model, psi0, v, t_max):
     unsup_nn_ys_real, unsup_nn_ys_imag = solve_single_nn(unsup_model, psi0, v, ts, 100)
     print('Finished unsolving supervised nn.')
     
-    xs = np.linspace(0, 1, 100)
+    sup_norms = np.sum(sup_nn_ys_real**2 + sup_nn_ys_imag**2, axis=1)/100
+    unsup_norms = np.sum(unsup_nn_ys_real**2 + unsup_nn_ys_imag**2, axis=1)/100
+
     
     # Plot animations
     mpl.rcParams['font.family'] = 'EB Garamond'
@@ -100,96 +96,24 @@ def test_model(sup_model, psi0, v, t_max):
     plt.rcParams['text.usetex'] = True
     plt.rcParams['text.latex.preamble']="\\usepackage{mathpazo}"
 
-    fig = plt.figure(figsize=(6.8,5))
+    fig = plt.figure(figsize=(3.4,2.6))
+    ctrl_plt = plt.plot(ts, sup_norms, color='#00b35a')
+    mod_plt = plt.plot(ts, unsup_norms, color='#ff0080')
     
-    sp = plt.subplot(3,3,1)
-    sp.plot(xs, sup_nn_ys_real[0,:], color='#0000ff')
-    sp.plot(xs, sup_nn_ys_imag[0,:], color='#ff0000')
-    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft='on')
-    sp.set_ylabel('Data-Driven')
-    sp.title.set_text('$t$=0.0')
-    sp.axes.xaxis.set_ticklabels([])
-    sp.axes.yaxis.set_ticklabels([])
-    sp.set_ylim(-1.7,1.7)
+    plt.xlabel('Model Time')
+    plt.ylabel('Normalisation')
 
-    sp = plt.subplot(3,3,2)
-    sp.plot(xs, sup_nn_ys_real[1,:], color='#0000ff')
-    sp.plot(xs, sup_nn_ys_imag[1,:], color='#ff0000')
-    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
-    sp.title.set_text('$t$=0.1')
-    sp.axes.xaxis.set_ticklabels([])
-    sp.axes.yaxis.set_ticklabels([])
-    sp.set_ylim(-1.7,1.7)
+    plt.title('Normalisation of Fifth Energy State', fontsize=9, y=1.25)
 
-
-    sp = plt.subplot(3,3,3)
-    sp.plot(xs, sup_nn_ys_real[2,:], color='#0000ff')
-    sp.plot(xs, sup_nn_ys_imag[2,:], color='#ff0000')
-    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
-    sp.title.set_text('$t$=0.2')
-    sp.axes.xaxis.set_ticklabels([])
-    sp.axes.yaxis.set_ticklabels([])
-    sp.set_ylim(-1.7,1.7)
-
-    
-    sp = plt.subplot(3,3,4)
-    sp.plot(xs, unsup_nn_ys_real[0,:], color='#0000ff')
-    sp.plot(xs, unsup_nn_ys_imag[0,:], color='#ff0000')
-    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft='on')
-    sp.set_ylabel('Physics-Driven')
-    sp.axes.xaxis.set_ticklabels([])
-    sp.axes.yaxis.set_ticklabels([])
-    sp.set_ylim(-1.7,1.7)
-
-    sp = plt.subplot(3,3,5)
-    sp.plot(xs, unsup_nn_ys_real[1,:], color='#0000ff')
-    sp.plot(xs, unsup_nn_ys_imag[1,:], color='#ff0000')
-    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
-    sp.axes.xaxis.set_ticklabels([])
-    sp.axes.yaxis.set_ticklabels([])
-    sp.set_ylim(-1.7,1.7)
-
-
-    sp = plt.subplot(3,3,6)
-    sp.plot(xs, unsup_nn_ys_real[2,:], color='#0000ff')
-    sp.plot(xs, unsup_nn_ys_imag[2,:], color='#ff0000')
-    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
-    sp.axes.xaxis.set_ticklabels([])
-    sp.axes.yaxis.set_ticklabels([])
-    sp.set_ylim(-1.7,1.7)
-
-    sp = plt.subplot(3,3,7)
-    sp.plot(xs, num_ys_real[0,:], color='#0000ff')
-    sp.plot(xs, num_ys_imag[0,:], color='#ff0000')
-    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft='on')
-    sp.set_ylabel('Runge–Kutta')
-    sp.axes.xaxis.set_ticklabels([])
-    sp.axes.yaxis.set_ticklabels([])
-    sp.set_ylim(-1.7,1.7)
-
-    sp = plt.subplot(3,3,8)
-    sp.plot(xs, num_ys_real[1,:], color='#0000ff')
-    sp.plot(xs, num_ys_imag[1,:], color='#ff0000')
-    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
-    sp.axes.xaxis.set_ticklabels([])
-    sp.axes.yaxis.set_ticklabels([])
-    sp.set_ylim(-1.7,1.7)
-
-
-    sp = plt.subplot(3,3,9)
-    sp.plot(xs, num_ys_real[2,:], color='#0000ff')
-    sp.plot(xs, num_ys_imag[2,:], color='#ff0000')
-    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
-    sp.axes.xaxis.set_ticklabels([])
-    sp.axes.yaxis.set_ticklabels([])
-    sp.set_ylim(-1.7,1.7)
-
-    plt.suptitle('Visual Comparison between Our Models and Numerical Integration', fontsize=10)
+    leg = plt.legend(['Physics-Drvn', 'Modified Physics-Drvn'], shadow=False, edgecolor='#000000', framealpha=1.0, ncol=3, bbox_to_anchor=(0,1.0,1,0.0), loc='lower left', mode='expand', prop={'size': 7})
+    leg.get_frame().set_boxstyle('Square', pad=0.1)
+    leg.get_frame().set(capstyle='butt', joinstyle='miter', linewidth=1.0)
 
     plt.tight_layout()
+    plt.tight_layout()
 
-    plt.savefig('figure_gen/1_2_visual_comparison.pdf')
-    plt.savefig('figure_gen/1_2_visual_comparison.pgf')
+    plt.savefig(f'figure_gen/9_mod_norm.pdf')
+    plt.savefig(f'figure_gen/9_mod_norm.pgf')
 
 
     plt.show()
@@ -249,7 +173,7 @@ class ModelTests():
 
 def main():
     params = {
-        'MODEL': SUPERVISED_MODEL,
+        'MODEL': CONTROL_MODEL,
         'T_MAX': 0.5
     }
 
@@ -269,7 +193,7 @@ def main():
 
     # Test model
     test = ModelTests(params['T_MAX'])
-    test.add('particle_in_box_eigen1', lambda x: np.sqrt(2)*np.sin(np.pi*x), lambda x: 0*x, lambda x: 0*x)
+    test.add('particle_in_box_eigen5', lambda x: np.sqrt(2)*np.sin(5*np.pi*x), lambda x: 0*x, lambda x: 0*x)
 
     test.perform_tests(model)
     

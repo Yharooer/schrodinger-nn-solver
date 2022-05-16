@@ -63,7 +63,7 @@ def update_at_major(epoch, total_losses, component_losses, validation_losses, le
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimiser.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict() if scheduler != None else None,
             'params': params,
             'total_losses': total_losses,
             'component_losses': component_losses,
@@ -159,7 +159,8 @@ def train_model(params, output_directory, call_at_epoch=None, ray_tune_checkpoin
             optm = torch.optim.Adam(model.parameters(), lr = params['LEARNING_RATE'])
             optm.load_state_dict(checkpoint_data['optimizer_state_dict'])
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optm)
-            scheduler.load_state_dict(checkpoint_data['scheduler_state_dict'])
+            if checkpoint_data['scheduler_state_dict'] != None:
+                scheduler.load_state_dict(checkpoint_data['scheduler_state_dict'])
 
             # Override the minimum learning rate in case it was changed in the arguments.
             scheduler.min_lrs = [params['MINIMUM_LEARNING_RATE']*len(optm.param_groups)]

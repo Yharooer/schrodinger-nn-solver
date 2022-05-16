@@ -75,7 +75,7 @@ def test_model(sup_model, psi0, v, t_max):
     unsup_model = SchrodingerModel(hidden_dim=hidden_dim, num_layers=num_layers).to(device)
     unsup_model.load_state_dict(model_state_dict)
 
-    ts = [0.0, 0.1, 0.2, 0.3]
+    ts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
 
     # Solve numerically
     print('Solving numerically...')
@@ -100,39 +100,67 @@ def test_model(sup_model, psi0, v, t_max):
     plt.rcParams['text.usetex'] = True
     plt.rcParams['text.latex.preamble']="\\usepackage{mathpazo}"
 
-    fig = plt.figure(figsize=(6.8,5))
+    fig = plt.figure(figsize=(6.8,3.75))
     
-    sp = plt.subplot(3,3,1)
+    sp = plt.subplot(3,6,1)
     sp.plot(xs, sup_nn_ys_real[0,:], color='#0000ff')
     sp.plot(xs, sup_nn_ys_imag[0,:], color='#ff0000')
     plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft='on')
     sp.set_ylabel('Data-Driven')
-    sp.title.set_text('$t$=0.0')
+    sp.title.set_text('$t$=0.00')
     sp.axes.xaxis.set_ticklabels([])
     sp.axes.yaxis.set_ticklabels([])
     sp.set_ylim(-1.7,1.7)
 
-    sp = plt.subplot(3,3,2)
+    sp = plt.subplot(3,6,2)
     sp.plot(xs, sup_nn_ys_real[1,:], color='#0000ff')
     sp.plot(xs, sup_nn_ys_imag[1,:], color='#ff0000')
     plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
-    sp.title.set_text('$t$=0.1')
+    sp.title.set_text('$t$=0.10')
     sp.axes.xaxis.set_ticklabels([])
     sp.axes.yaxis.set_ticklabels([])
     sp.set_ylim(-1.7,1.7)
 
 
-    sp = plt.subplot(3,3,3)
+    sp = plt.subplot(3,6,3)
     sp.plot(xs, sup_nn_ys_real[2,:], color='#0000ff')
     sp.plot(xs, sup_nn_ys_imag[2,:], color='#ff0000')
     plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
-    sp.title.set_text('$t$=0.2')
+    sp.title.set_text('$t$=0.20')
     sp.axes.xaxis.set_ticklabels([])
     sp.axes.yaxis.set_ticklabels([])
     sp.set_ylim(-1.7,1.7)
 
+    sp = plt.subplot(3,6,4)
+    sp.plot(xs, sup_nn_ys_real[3,:], color='#0000ff')
+    sp.plot(xs, sup_nn_ys_imag[3,:], color='#ff0000')
+    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+    sp.title.set_text('$t$=0.30')
+    sp.axes.xaxis.set_ticklabels([])
+    sp.axes.yaxis.set_ticklabels([])
+    sp.set_ylim(-1.7,1.7)
+
+    sp = plt.subplot(3,6,5)
+    sp.plot(xs, sup_nn_ys_real[4,:], color='#0000ff')
+    sp.plot(xs, sup_nn_ys_imag[4,:], color='#ff0000')
+    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+    sp.title.set_text('$t$=0.40')
+    sp.axes.xaxis.set_ticklabels([])
+    sp.axes.yaxis.set_ticklabels([])
+    sp.set_ylim(-1.7,1.7)
+
+    sp = plt.subplot(3,6,6)
+    sp.plot(xs, sup_nn_ys_real[5,:], color='#0000ff')
+    sp.plot(xs, sup_nn_ys_imag[5,:], color='#ff0000')
+    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+    sp.title.set_text('$t$=0.50')
+    sp.axes.xaxis.set_ticklabels([])
+    sp.axes.yaxis.set_ticklabels([])
+    sp.set_ylim(-1.7,1.7)
+
+    ## Physics Driven
     
-    sp = plt.subplot(3,3,4)
+    sp = plt.subplot(3,6,7)
     sp.plot(xs, unsup_nn_ys_real[0,:], color='#0000ff')
     sp.plot(xs, unsup_nn_ys_imag[0,:], color='#ff0000')
     plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft='on')
@@ -141,7 +169,7 @@ def test_model(sup_model, psi0, v, t_max):
     sp.axes.yaxis.set_ticklabels([])
     sp.set_ylim(-1.7,1.7)
 
-    sp = plt.subplot(3,3,5)
+    sp = plt.subplot(3,6,8)
     sp.plot(xs, unsup_nn_ys_real[1,:], color='#0000ff')
     sp.plot(xs, unsup_nn_ys_imag[1,:], color='#ff0000')
     plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
@@ -150,7 +178,7 @@ def test_model(sup_model, psi0, v, t_max):
     sp.set_ylim(-1.7,1.7)
 
 
-    sp = plt.subplot(3,3,6)
+    sp = plt.subplot(3,6,9)
     sp.plot(xs, unsup_nn_ys_real[2,:], color='#0000ff')
     sp.plot(xs, unsup_nn_ys_imag[2,:], color='#ff0000')
     plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
@@ -158,7 +186,33 @@ def test_model(sup_model, psi0, v, t_max):
     sp.axes.yaxis.set_ticklabels([])
     sp.set_ylim(-1.7,1.7)
 
-    sp = plt.subplot(3,3,7)
+    sp = plt.subplot(3,6,10)
+    sp.plot(xs, unsup_nn_ys_real[3,:], color='#0000ff')
+    sp.plot(xs, unsup_nn_ys_imag[3,:], color='#ff0000')
+    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+    sp.axes.xaxis.set_ticklabels([])
+    sp.axes.yaxis.set_ticklabels([])
+    sp.set_ylim(-1.7,1.7)
+
+    sp = plt.subplot(3,6,11)
+    sp.plot(xs, unsup_nn_ys_real[4,:], color='#0000ff')
+    sp.plot(xs, unsup_nn_ys_imag[4,:], color='#ff0000')
+    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+    sp.axes.xaxis.set_ticklabels([])
+    sp.axes.yaxis.set_ticklabels([])
+    sp.set_ylim(-1.7,1.7)
+
+    sp = plt.subplot(3,6,12)
+    sp.plot(xs, unsup_nn_ys_real[5,:], color='#0000ff')
+    sp.plot(xs, unsup_nn_ys_imag[5,:], color='#ff0000')
+    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+    sp.axes.xaxis.set_ticklabels([])
+    sp.axes.yaxis.set_ticklabels([])
+    sp.set_ylim(-1.7,1.7)
+
+    # Runge-Kutta
+
+    sp = plt.subplot(3,6,13)
     sp.plot(xs, num_ys_real[0,:], color='#0000ff')
     sp.plot(xs, num_ys_imag[0,:], color='#ff0000')
     plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft='on')
@@ -167,7 +221,7 @@ def test_model(sup_model, psi0, v, t_max):
     sp.axes.yaxis.set_ticklabels([])
     sp.set_ylim(-1.7,1.7)
 
-    sp = plt.subplot(3,3,8)
+    sp = plt.subplot(3,6,14)
     sp.plot(xs, num_ys_real[1,:], color='#0000ff')
     sp.plot(xs, num_ys_imag[1,:], color='#ff0000')
     plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
@@ -176,9 +230,33 @@ def test_model(sup_model, psi0, v, t_max):
     sp.set_ylim(-1.7,1.7)
 
 
-    sp = plt.subplot(3,3,9)
+    sp = plt.subplot(3,6,15)
     sp.plot(xs, num_ys_real[2,:], color='#0000ff')
     sp.plot(xs, num_ys_imag[2,:], color='#ff0000')
+    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+    sp.axes.xaxis.set_ticklabels([])
+    sp.axes.yaxis.set_ticklabels([])
+    sp.set_ylim(-1.7,1.7)
+
+    sp = plt.subplot(3,6,16)
+    sp.plot(xs, num_ys_real[3,:], color='#0000ff')
+    sp.plot(xs, num_ys_imag[3,:], color='#ff0000')
+    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+    sp.axes.xaxis.set_ticklabels([])
+    sp.axes.yaxis.set_ticklabels([])
+    sp.set_ylim(-1.7,1.7)
+
+    sp = plt.subplot(3,6,17)
+    sp.plot(xs, num_ys_real[4,:], color='#0000ff')
+    sp.plot(xs, num_ys_imag[4,:], color='#ff0000')
+    plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
+    sp.axes.xaxis.set_ticklabels([])
+    sp.axes.yaxis.set_ticklabels([])
+    sp.set_ylim(-1.7,1.7)
+
+    sp = plt.subplot(3,6,18)
+    sp.plot(xs, num_ys_real[5,:], color='#0000ff')
+    sp.plot(xs, num_ys_imag[5,:], color='#ff0000')
     plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft=False)
     sp.axes.xaxis.set_ticklabels([])
     sp.axes.yaxis.set_ticklabels([])

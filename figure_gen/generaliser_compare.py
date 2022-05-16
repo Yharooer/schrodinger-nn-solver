@@ -13,12 +13,16 @@ from utils.numerical_schrodinger import numerical_schrodinger
 from utils.model_definition import SchrodingerModel
 import torch
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 import matplotlib as mpl
 import json
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+# device = "cuda" if torch.cuda.is_available() else "cpu"
+device = 'cpu'
 
-def do_generalisation_tests_and_plots(max_test_fourier_mode, min_test_time, max_test_time, num_tests, supervised_models, unsupervised_models, plot_title, plot_xlabel, figure_save_location):
+NUMERICAL_SUBSET = 15
+
+def do_generalisation_tests_and_plots(max_test_fourier_mode, min_test_time, max_test_time, num_tests, supervised_models, unsupervised_models, plot_title, plot_xlabel, figure_save_location, is_log=False, include_zero_benchmark=True):
 
     # Generate tests
     tests = [] # Size five tuple of (t), (real cffs), (imaginary cffs), (sampled real analyticial solution), (sampled imag analyticial solution)
@@ -54,6 +58,45 @@ def do_generalisation_tests_and_plots(max_test_fourier_mode, min_test_time, max_
 
         tests.append((t, real_cffs, imag_cffs, final_real, final_imag))
 
+    # Evaluate benchmark
+    def solve_numerically(psi0, test):
+        t = test[0]
+
+        initials = np.zeros((3, 100, 1))
+        initials[0, :, 0], initials[1, :, 0] = psi0(np.linspace(0,1,100))
+        initials[2, :, 0] = 0
+
+        soln = numerical_schrodinger(initials, [t], grid_size=100)
+        real_soln = soln[0,:,0,0]
+        imag_soln = soln[1,:,0,0]
+
+        return real_soln, imag_soln
+
+    mse_errors = []
+    if NUMERICAL_SUBSET > 0:
+        print('Starting numerical integration benchmarks')
+        for test in tqdm(tests[0:NUMERICAL_SUBSET]):
+            def psi0(xs):
+                basis_n = lambda n,x: np.sin(n*np.pi*x)
+                real_psi0 = xs*0
+                imag_psi0 = xs*0
+                for i in range(max_test_fourier_mode):
+                    n_i = i+1
+                    real_psi0 += test[1][i]*basis_n(n_i, xs)
+                    imag_psi0 += test[2][i]*basis_n(n_i, xs)
+                return real_psi0, imag_psi0
+
+            out_real, out_imag = solve_numerically(psi0, test)
+
+            mse_loss = np.sum((out_real - test[3])**2 + (out_imag - test[4])**2)/200
+
+            mse_errors.append(mse_loss)
+        print('Finishing numerical integration benchmark')
+
+        benchmark = np.mean(mse_errors)
+    else:
+        benchmark = 1 # For testing
+
 
     # Now evaluate the different models
     DATA_DRIVEN_X = []
@@ -66,6 +109,9 @@ def do_generalisation_tests_and_plots(max_test_fourier_mode, min_test_time, max_
 
 
     def solve_single_nn(model, psi0, v, ts, grid_size=100):
+        if model == None:
+            return np.zeros((1,100)), np.zeros((1,100))
+
         xs = torch.linspace(0, 1, grid_size).float()
         ts = torch.tensor(ts).float()
         p0_real, p0_imag = psi0(xs)
@@ -93,13 +139,16 @@ def do_generalisation_tests_and_plots(max_test_fourier_mode, min_test_time, max_
         print(f'Evaluating model \'{model_path}\'')
 
         # Load model
-        checkpoint = torch.load(model_path, map_location=torch.device(device))
-        model_state_dict = checkpoint['model_state_dict']
-        hidden_dim = checkpoint['params']['HIDDEN_LAYER_SIZE']
-        num_layers = checkpoint['params']['NUM_HIDDEN_LAYERS'] if 'params' in checkpoint and 'NUM_HIDDEN_LAYERS' in checkpoint['params'] else 2
+        if model_path != None:
+            checkpoint = torch.load(model_path, map_location=torch.device(device))
+            model_state_dict = checkpoint['model_state_dict']
+            hidden_dim = checkpoint['params']['HIDDEN_LAYER_SIZE']
+            num_layers = checkpoint['params']['NUM_HIDDEN_LAYERS'] if 'params' in checkpoint and 'NUM_HIDDEN_LAYERS' in checkpoint['params'] else 2
 
-        model = SchrodingerModel(hidden_dim=hidden_dim, num_layers=num_layers).to(device)
-        model.load_state_dict(model_state_dict)
+            model = SchrodingerModel(hidden_dim=hidden_dim, num_layers=num_layers).to(device)
+            model.load_state_dict(model_state_dict)
+        else:
+            model = None
 
         # Evalulate results
         mse_errors = []
@@ -141,6 +190,10 @@ def do_generalisation_tests_and_plots(max_test_fourier_mode, min_test_time, max_
         PHYSICS_DRIVEN_MEANS.append(avg)
         PHYSICS_DRIVEN_DELTAS.append(delta)
 
+    # Zero model
+    zero_avg, zero_delta = eval_model(None)
+    print(f'Zero is {zero_avg}.')
+
     PHYSICS_DRIVEN_MEANS = np.array(PHYSICS_DRIVEN_MEANS)
     PHYSICS_DRIVEN_DELTAS = np.array(PHYSICS_DRIVEN_DELTAS)
 
@@ -150,21 +203,30 @@ def do_generalisation_tests_and_plots(max_test_fourier_mode, min_test_time, max_
         mpl.font_manager.fontManager.addfont(font)
 
     mpl.rcParams['font.family'] = 'EB Garamond'
+    mpl.rcParams['font.size'] = 9
     plt.rcParams['text.usetex'] = True
     plt.rcParams['text.latex.preamble']="\\usepackage{mathpazo}"
 
-    fig = plt.figure(figsize=(3.2,2.6))
-    plt.errorbar(DATA_DRIVEN_X, DATA_DRIVEN_MEANS*1e2, yerr=DATA_DRIVEN_DELTAS*1e2, color='#ff8000')
-    plt.errorbar(PHYSICS_DRIVEN_X, PHYSICS_DRIVEN_MEANS*1e2, yerr=PHYSICS_DRIVEN_DELTAS*1e2, color='#00ff80')
+    fig = plt.figure(figsize=(3.4,2.6))
+    dplt = plt.errorbar(DATA_DRIVEN_X, DATA_DRIVEN_MEANS, yerr=DATA_DRIVEN_DELTAS, color='#ff8000')
+    pplt = plt.errorbar(PHYSICS_DRIVEN_X, PHYSICS_DRIVEN_MEANS, yerr=PHYSICS_DRIVEN_DELTAS, color='#00b35a')
+    # if NUMERICAL_SUBSET > 0:
+    bplt = plt.axhline(y=benchmark, color='#8000ff', linestyle='--')
     plt.xlabel(plot_xlabel)
-    plt.ylabel('MSE Error / $10^{-2}$')
-    plt.title(plot_title)
+    plt.ylabel('MSE Error')
+    if is_log:
+        plt.yscale('log')
+    plt.title(plot_title, fontsize=9, y=1.25)
 
-    leg = plt.legend(['Data-Driven', 'Physics-Driven'], shadow=False, edgecolor='#000000', framealpha=1.0)
+    handles = [dplt, pplt]
+    if NUMERICAL_SUBSET > -5:
+        handles.append(bplt)
+    
+    leg = plt.legend(handles, ['Data-Drvn', 'Physics-Drvn', 'Numerical'], shadow=False, edgecolor='#000000', framealpha=1.0, ncol=3, bbox_to_anchor=(0,1.0,1,0.0), loc='lower left', mode='expand', prop={'size': 7})
     leg.get_frame().set_boxstyle('Square', pad=0.1)
     leg.get_frame().set(capstyle='butt', joinstyle='miter', linewidth=1.0)
 
-
+    plt.tight_layout()
     plt.tight_layout()
 
     plt.savefig(f'{figure_save_location}.pdf')

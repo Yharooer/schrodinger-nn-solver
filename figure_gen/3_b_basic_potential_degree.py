@@ -6,7 +6,7 @@ TESTING_MAX_TIME = 0.75
 NUM_TESTS = 100
 
 DATA_DRIVEN_FOURIER_MODE_MODELS = [
-    # (0, 'kiiara_2_results/models/31/1/model_at_epoch_1000.pt'),
+    (0, 'kiiara_2_results/models/31/1/model_at_epoch_1000.pt'),
     (2, 'kiiara_2_results/models/26/1/model_at_epoch_1000.pt'),
     (4, 'kiiara_2_results/models/27/1/model_at_epoch_1000.pt'),
     (6, 'kiiara_2_results/models/28/1/model_at_epoch_1000.pt'),
@@ -15,7 +15,13 @@ DATA_DRIVEN_FOURIER_MODE_MODELS = [
 ]
 
 PHYSICS_DRIVEN_FOURIER_MODE_MODELS = [
-    
+    (1, 'kiiara_2_results/models/57/1/model_at_epoch_1000.pt'),
+    (2, 'kiiara_2_results/models/64/1/model_at_epoch_1000.pt'),
+    (3, 'kiiara_2_results/models/65/1/model_at_epoch_1000.pt'),
+    (4, 'kiiara_2_results/models/66/1/model_at_epoch_1000.pt'),
+    (5, 'kiiara_2_results/models/67/2/model_at_epoch_1000.pt'),
+    (7, 'kiiara_2_results/models/68/2/model_at_epoch_1000.pt'),
+    (9, 'kiiara_2_results/models/69/1/model_at_epoch_1000.pt')
 ]
 
 do_generalisation_tests_and_plots(

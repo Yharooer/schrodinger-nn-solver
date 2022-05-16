@@ -226,12 +226,16 @@ def main():
     test.add('particle_in_box_eigen4', lambda x: np.sqrt(2)*np.sin(4*np.pi*x), lambda x: 0*x, lambda x: 0*x)
     test.add('particle_in_box_eigen5', lambda x: np.sqrt(2)*np.sin(5*np.pi*x), lambda x: 0*x, lambda x: 0*x)
     test.add('particle_in_box_eigen6', lambda x: np.sqrt(2)*np.sin(6*np.pi*x), lambda x: 0*x, lambda x: 0*x)
+
+    #test.add('sloped_box_0', lambda x: np.sqrt(2)*(0.480414*np.sin(np.pi*x) + 0.707106*np.sin(2*np.pi*x) + 0.518847*np.sin(3*np.pi*x)), lambda x: 0*x, lambda x: 8*x)
+
     test.add('raised_box_eigen1', lambda x: np.sqrt(2)*np.sin(np.pi*x), lambda x: 0*x, lambda x: 0*x + 5)
     test.add('raised_box_eigen2', lambda x: np.sqrt(2)*np.sin(2*np.pi*x), lambda x: 0*x, lambda x: 0*x + 5)
     test.add('raised_box_eigen3', lambda x: np.sqrt(2)*np.sin(3*np.pi*x), lambda x: 0*x, lambda x: 0*x + 5)
     test.add('raised_box_eigen6', lambda x: np.sqrt(2)*np.sin(6*np.pi*x), lambda x: 0*x, lambda x: 0*x + 5)
-    test.add('sloped_box_1', lambda x: np.sqrt(2)*np.sin(np.pi*x), lambda x: 0*x, lambda x: 2*x)
-    test.add('sloped_box_2', lambda x: np.sqrt(2)*np.sin(np.pi*x), lambda x: 0*x, lambda x: 5*x)
+    test.add('sloped_box_1', lambda x: np.sqrt(2)*np.sin(np.pi*x), lambda x: 0*x, lambda x: 8*x - 4 - np.pi**2/2)
+    test.add('sloped_box_2', lambda x: np.sqrt(2)*np.sin(np.pi*x), lambda x: 0*x, lambda x: 15*x - 7.5 - np.pi**2/2)
+    test.add('sloped_box_2', lambda x: np.sqrt(2)*np.sin(np.pi*x), lambda x: 0*x, lambda x: 30*x - 15 - np.pi**2/2)
     test.add('harmonic_1', lambda x: 1.728*np.exp(-0.5*7*(2*x-1)**2), lambda x: 0*x, lambda x: 0.125*7*(2*x-1)**2)
     # test.add('particle_in_box_flat2', lambda x: (1-(1/3))*(1-(2*x-1)**2), lambda x: 0*x, lambda x: 0*x)
     # test.add('particle_in_box_flat4', lambda x: (1-(1/5))*(1-(2*x-1)**4), lambda x: 0*x, lambda x: 0*x)
