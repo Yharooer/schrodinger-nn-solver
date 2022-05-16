@@ -4,7 +4,7 @@ Quantum mechanics is governed by the Schrödinger equation which has few analyti
 
 [Read the report.](bentley_schrod_report_public.pdf)
 
-## Examples
+## Example Usage
 - Train a fully supervised model over t=\[0,0.5\] with initial states sampling from 3 fourier modes and no potential with each initial state evaluated at 10 linearly spaced points in time and 25 linearly spaced points in space.
 ```
 python3 generate_training_data.py 0.5 --NUM_TIME_STEPS 10 --TRAINING_GRID_SIZE 25 --NUM_INITIAL_STATES 4000 --NUM_FOURIER_MODES 3 --NUM_POTENTIAL_DEGREE -1
