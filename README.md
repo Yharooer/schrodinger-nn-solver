@@ -1,6 +1,8 @@
-# Schrodinger NN Solver by Bentley Carr
+# Physics-Driven Modeeling of the Schrödinger Equation
 
-Part III Project for Part III Physics at the University of Cambridge.
+Quantum mechanics is governed by the Schrödinger equation which has few analytical solutions and can only be solved generally with slow error-prone numerical methods. We detail two machine-learning models which are able to predict solutions to the 1D Schrödinger equation for a particle confined to a box under the influence of an arbitrary potential. We present the data-driven model which is trained from numerical solutions and the physics-driven model which discovers solutions on its own during training with only knowledge of the governing PDE and boundary conditions. We find that both methods are able to reproduce solutions to the Schrödinger equation to a good approximation. The physics-driven model demonstrates better performance than the data-driven model for simple input vectors but the data-driven model is better at generalising to more complicated initial state and potentials. In particular the physics-driven model struggles learning fast dynamics of the Schrödinger equation. We compare the physics-driven model to the numerical Runge{\textendash}Kutta method and we demonstrate that our model is able to predict solutions 1125 times faster than the numerical method while demonstrating similar performance.
+
+[Read the full report.](bentley_schrod_report_public.pdf)
 
 ## Examples
 - Train a fully supervised model over t=\[0,0.5\] with initial states sampling from 3 fourier modes and no potential with each initial state evaluated at 10 linearly spaced points in time and 25 linearly spaced points in space.
