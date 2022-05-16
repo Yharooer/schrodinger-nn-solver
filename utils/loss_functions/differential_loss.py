@@ -1,6 +1,8 @@
 import torch
 from ..batch_interpolate import batch_eval
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 def differential_loss(output, inputs, model, use_autograd=False):
     batch_size = output.shape[0]
     
