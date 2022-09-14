@@ -69,18 +69,23 @@ def test_model(model, psi0, v, t_max, t_steps, output_file, plot_phase=False):
     xs = np.linspace(0, 1, 100)
     
     # Plot animations
-    mpl.rcParams['font.family'] = 'CMU Bright'
-    mpl.rcParams['mathtext.fontset'] = 'cm'
+    mpl.rcParams['font.family'] = 'EB Garamond'
+    mpl.rcParams['font.size'] = 11
+    plt.rcParams['text.usetex'] = True
+    plt.rcParams['text.latex.preamble']="\\usepackage{mathpazo}"
 
     fig = plt.figure(figsize=(5.1,3.0))
     
     # Helper for setting up subplot limits and labels
     def setup_subplot(subplot):
         subplot.set_xlim(0,1)
-        subplot.set_ylim(-2,2)
+        subplot.set_ylim(-1.7,1.7)
+
+        subplot.axes.xaxis.set_ticklabels([])
+        subplot.axes.yaxis.set_ticklabels([])
         
-        line1, = subplot.plot([],[], lw=2, color='#3333B2')
-        line2, = subplot.plot([],[], lw=2, color='#B23333')
+        line1, = subplot.plot([],[], lw=2, color='#0000ff')
+        line2, = subplot.plot([],[], lw=2, color='#ff0000')
         return line1,line2
     
        
@@ -88,6 +93,7 @@ def test_model(model, psi0, v, t_max, t_steps, output_file, plot_phase=False):
     lines = []
     for i in range(2):
         subplot = plt.subplot(1,2,i+1)
+        plt.tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False, right=False, left=False, labelleft='on')
         line1, line2 = setup_subplot(subplot)
         lines.append(line1)
         lines.append(line2)
@@ -95,7 +101,9 @@ def test_model(model, psi0, v, t_max, t_steps, output_file, plot_phase=False):
         
     subplots[0].title.set_text('Physics-Driven Model')
     subplots[0].set_ylabel("$\\psi(\\vec x,t)$")
+    subplots[0].set_xlabel("$x$")
     subplots[1].title.set_text('Numerical Model')
+    subplots[1].set_xlabel("$x$")
     
     def animate(i):
         lines[0].set_data(xs, nn_ys_real[i,:])
@@ -117,7 +125,7 @@ def get_arguments():
                         help='The model to evaluate.')
     parser.add_argument('T_MAX', type=float, nargs=1,
                         help='The max time step.')
-    parser.add_argument('--T_STEPS', type=int, nargs='?', default=50,
+    parser.add_argument('--T_STEPS', type=int, nargs='?', default=200,
                         help='The max number of steps.')
 
     args = vars(parser.parse_args())
@@ -195,6 +203,8 @@ def main():
 
     # Test model
     test = ModelTests(params['T_MAX'], params['T_STEPS'], output_directory)
+    
+    test.add('particle_in_box_eigen5', lambda x: np.sqrt(2)*np.sin(5*np.pi*x), lambda x: 0*x, lambda x: 0*x)
     test.add('particle_in_box_eigen1', lambda x: np.sqrt(2)*np.sin(np.pi*x), lambda x: 0*x, lambda x: 0*x)
     test.add('particle_in_box_eigen2', lambda x: np.sqrt(2)*np.sin(2*np.pi*x), lambda x: 0*x, lambda x: 0*x)
     test.add('particle_in_box_eigen3', lambda x: np.sqrt(2)*np.sin(3*np.pi*x), lambda x: 0*x, lambda x: 0*x)
