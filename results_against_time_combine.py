@@ -72,8 +72,8 @@ def do_combine_data(output_dir, params):
 
     # plt.yscale('log')
     plt.xlabel('Model Time')
-    plt.ylabel('Relative Performance')
-    plt.title('Relative Performance of Physics-Driven Model', fontsize=9)
+    plt.ylabel('Relative Evaluation Time')
+    plt.title('Relative Evaluation Time of Physics-Driven Model', fontsize=9)
 
     plt.tight_layout()
     plt.tight_layout()
